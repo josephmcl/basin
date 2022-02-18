@@ -12,22 +12,21 @@ namespace domain {
 
     //struct _domain TheDomain;
 
-
-
-template<int length, double r̂, double l> auto 
-transform(std::vector<double> &r, std::vector<double> &s) -> void {
-
+template<double length, double r̂, double l> 
+auto constexpr transform_e1() {
     double constexpr a = (length - length * r̂ - length) 
         / (2 * tanh((r̂ - 1) / l) + tanh(-2 / l) * (r̂ - 1));
     double constexpr b = (a * tanh(-2 / l) + length) / 2;
     double constexpr c = length - b;
+    return [] (double x) {return a * tanh((x - 1) / l) + b * x + c;}; }
 
-    // (A .* tanh.((r .- 1) ./ l) .+ b .* r .+ c,
-
-    std::cout << 
-        "a: " << a << std::endl <<
-        "b: " << b << std::endl <<
-        "c: " << c << std::endl;}
+template<double length, double r̂, double l> 
+auto constexpr transform_e2() {
+    double constexpr a = (length - length * r̂ - length) 
+        / (2 * tanh((r̂ - 1) / l) + tanh(-2 / l) * (r̂ - 1));
+    double constexpr b = (a * tanh(-2 / l) + length) / 2;
+    return [] (double x) {return ((a * pow(1 / (cosh((x - 1) / l)), 
+        2.)) / l) + b;}; }
 
 
 } /* namespace domain */

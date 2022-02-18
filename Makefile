@@ -6,6 +6,7 @@ target = main
 
 cc = g++-11
 
+source_ext = cpp
 header_directory = include
 source_directory = source
 object_directory = object
@@ -41,7 +42,7 @@ includes := -I./$(header_directory)
 test_includes := $(includes) -I./$(test_directory)
 
 define speaker
-	@echo "[make]$(1)" 
+	@echo [make:$$PPID] $(1)
 	@$(1)
 endef
 
@@ -53,7 +54,7 @@ $(binary_directory)/$(test_target): $(objects) $(test_objects)
 	$(call speaker,\
 	$(cc) $(objects_&_test_objects) -o $@)
 
-$(objects): $(object_directory)/%.o : $(source_directory)/%.cpp
+$(objects): $(object_directory)/%.o : $(source_directory)/%.$(source_ext)
 	$(call speaker,\
 	$(cc) $(compiler_flags) -c $< -o $@ $(includes))
 

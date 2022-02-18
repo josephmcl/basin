@@ -7,12 +7,10 @@
     Initial design take from stackoverflow.com/a/56217827 */
 
 #include <ranges>
-
 #include <iostream>
-
 #include <vector>
-
 #include <functional>
+#include <algorithm>
 
 namespace numerics {
 
@@ -77,7 +75,11 @@ template <typename T> struct linrange {
         I &operator ++ () { /* weakly_incrementable */ 
             _inc_impl(); return *this; } 
         I operator ++(int) { /* incrementable */ 
-            I temp = *this; ++*this; return temp; }                 
+            I temp = *this; ++*this; return temp; }     
+        I &operator --() { /* weakly_incrementable */ 
+            _dec_impl(); return *this; }             
+        I operator --(int) { /* incrementable */ 
+            I temp = *this; --*this; return temp; }  
         I &operator = (I const &lhs); /* assignable_from */
         bool operator == (const I &other) /* equality_comparable */
             const { return index == other.index; }
@@ -89,6 +91,11 @@ template <typename T> struct linrange {
             if(index >= Linrange->_size)
                 index = Linrange->_size; } 
 
+        void _dec_impl() { 
+            index -= 1; 
+            if(index <= 0)
+                index = 0; } 
+
         T &value() {
             _value = Linrange->from + (index * Linrange->space); 
             for (auto &t : Linrange->transforms)
@@ -97,17 +104,20 @@ template <typename T> struct linrange {
     };
     
     /* std::forward_range constraints */
-    auto begin() const { return iterator{0, this}; }
-    auto end()   const { return iterator{_size, this}; }
+    auto begin() const noexcept { return iterator{0, this}; }
+    auto end()   const noexcept { return iterator{_size, this}; }
     /* std::sized_range constraint */                             
-    auto size()  const { return _size; }; 
+    auto size()  const noexcept { return _size; }; 
+    auto operator [](std::size_t const index) const noexcept {
+        return iterator{std::clamp(index, std::size_t(0), 
+            std::size_t(_size)), this}; };
+
     
 };  
 
     template <typename T, typename R>
     auto operator |(linrange<T> t, R r) {
         t.transforms.push_back(r);
-        std::cout << "add transform" <<  std::endl;
         return t;
     }
 
