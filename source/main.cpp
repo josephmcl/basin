@@ -1,5 +1,3 @@
-// #include "domain.h"
-
 #include "ranges.h"
 #include "domain.h"
 #include "physical.h"
@@ -42,7 +40,8 @@ int main (int argc, char *argv[]) {
     │   o ╱     ╲╲╱            │   ┆   ┆   ┆   │ 
     │    o ┄┄┄┄┄ o           1 ├┄┄┄┼┄┄┄┼┄┄┄┼┄┄┄┤ 2
     │                          │   ┆   ┆   ┆   │
-    └───────────────╴x         └───┴───┴───┴───┴──╴r  */
+    └───────────────╴x         └───┴───┴───┴───┴──╴r  
+                                     face 3 */
 
     /*  In the original problem, r and s are given as a 2D matrices,
 
