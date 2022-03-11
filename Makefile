@@ -66,6 +66,7 @@ $(test_objects): $(object_directory)/%.o : $(test_directory)/%.cpp
 .PHONY: clean
 clean:
 	@$(rm) $(objects)
+	@$(rm) $(test_objects)
 
 .PHONY: remove
 remove: clean
