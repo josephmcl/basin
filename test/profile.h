@@ -1,4 +1,5 @@
-/* profile.h */
+/* profile.h 
+Core profiling and testing infrastructure for small C++ projects. */
 #pragma once
 
 #include <iomanip>
@@ -9,6 +10,25 @@
 #include <tuple>
 #include <cmath>
 
+/* High-level usage: 
+
+test.h:
+
+    DECLARE_PROFILE(MY_TEST);
+
+test.cpp:
+
+    #include "test.h"
+    DEFINE_PROFILE(MY_TEST)
+        ASSERT(1 != 1, "Inanity.");
+    ENDDEF_PROFILE
+
+test_main.cpp:
+
+    #include "test.h"
+    int main() { test::test(MY_TEST); return 0; }
+
+*/
 #define DECLARE_PROFILE(x) std::tuple<std::source_location, bool> \
     const x(void);
 #define DEFINE_PROFILE(x) std::tuple<std::source_location, bool>  \
@@ -20,7 +40,7 @@
 #   define ASSERT(condition, message) \
     do { if (! (condition)) { std::cerr << std::setprecision(14) \
     << std::scientific << "\033[31mAssertion failed\033[0m in "  \
-    << __FILE__ <<  " line " << __LINE__ << std::endl << message      \
+    << __FILE__ <<  " line " << __LINE__ << std::endl << message \
     << std::endl;        \
     return std::make_tuple(_res_, false); } } while (false)
 #else
@@ -33,7 +53,7 @@ namespace test {
     std::tuple<bool, std::string> approx(T a, T b, T ϵ=1e-9) {
         std::stringstream ss;
         ss << std::setprecision(14) << std::scientific 
-           << a << " != " << b << " (ϵ=" << std::setprecision(3) 
+           << a << " != " << b << " (ϵ=" << std::setprecision(0) 
            << ϵ << ")";
         return make_tuple(std::abs(a - b) < ϵ, ss.str()); }
 
