@@ -24,10 +24,7 @@ int main (int argc, char *argv[]) {
 
     auto metrics = domain::metrics<D>(400, 400);
 
-
-    auto j = metrics.j();
-
-    std::cout << j(100, 100) << std::endl;
+    physical::fault_params(metrics.y());
 
     return 0;
 }

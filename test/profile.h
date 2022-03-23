@@ -49,6 +49,8 @@ test_main.cpp:
 
 namespace test {
 
+    static bool picky = false;
+
     template<typename T>
     std::tuple<bool, std::string> approx(T a, T b, T ϵ=1e-9) {
         std::stringstream ss;
@@ -70,5 +72,7 @@ namespace test {
         else
             std::cout << "[\033[31m ✗ \033[0m] " << s << " failed." 
                       << std::endl;
+
+        if (picky && !success) exit(-1);
     }
 }

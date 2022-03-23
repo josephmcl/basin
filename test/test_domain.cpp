@@ -1,11 +1,11 @@
 #include "test_domain.h"
 
 
-std::string test_input_path = "/Users/josephmcl/phd/thrase/Basin_Simulations/";
+static std::string test_input_path = "/Users/josephmcl/phd/thrase/Basin_Simulations/";
 
 double constexpr test_domain_N  = 400.;
 
-domain::data constexpr D = {
+static domain::data constexpr D = {
     .length      = 24.   ,
     .basin_depth =   4.  ,
     .r̂           =   0.75, 
@@ -57,7 +57,7 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_COORD_Y)
 
     auto met = domain::metrics<D>(test_domain_N, test_domain_N);
     auto y = met.y();
-
+    
     ASSERT(std::get<1>(m) == y.size(), "y linrange is a different "
         "size than test input y.");
 
@@ -170,7 +170,6 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_CSS)
 
     auto met = domain::metrics<D>(test_domain_N, test_domain_N);
 
-    
     auto css = met.css();
 
     for (std::size_t i = 0; i < std::get<0>(m); ++i) {
@@ -187,7 +186,7 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_CSS)
 ENDDEF_PROFILE  
 
 DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_RX)
-    
+
     std::ifstream f;
     f.open(test_input_path + "test/metrics.rx.csv", 
         std::ifstream::in);
@@ -214,7 +213,7 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_RX)
 ENDDEF_PROFILE  
 
 DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SY)
-    
+
     std::ifstream f;
     f.open(test_input_path + "test/metrics.sy.csv", 
         std::ifstream::in);
@@ -239,3 +238,167 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SY)
     delete std::get<2>(m);
 
 ENDDEF_PROFILE  
+
+
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_ETA)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.eta.csv", 
+        std::ifstream::in);
+    auto [N, M, test_eta] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_eta->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto eta = met.η();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto etaij = eta(i);
+            auto test = test_eta->at((M * i) + j);
+            auto[passed, message] = test::approx(etaij, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_eta;
+
+ENDDEF_PROFILE  
+
+
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_MU_FACE_2)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.muf2.csv", 
+        std::ifstream::in);
+    auto [N, M, test_muf2] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_muf2->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto muf2 = met.μf2();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto muf2i = muf2(i);
+            auto test = test_muf2->at((M * i) + j);
+            auto[passed, message] = test::approx(muf2i, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_muf2;
+
+ENDDEF_PROFILE
+/* */
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SURFACE_JACOBIAN_FACE_1)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.sj1.csv", 
+        std::ifstream::in);
+    auto [N, M, test_sj1] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_sj1->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto sj1 = met.sj1();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto sj1i = sj1(i);
+            auto test = test_sj1->at((M * i) + j);
+            auto[passed, message] = test::approx(sj1i, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_sj1;
+
+ENDDEF_PROFILE
+/* */
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SURFACE_JACOBIAN_FACE_2)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.sj2.csv", 
+        std::ifstream::in);
+    auto [N, M, test_sj2] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_sj2->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto sj2 = met.sj2();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto sj2i = sj2(i);
+            auto test = test_sj2->at((M * i) + j);
+            auto[passed, message] = test::approx(sj2i, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_sj2;
+
+ENDDEF_PROFILE
+/* */
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SURFACE_JACOBIAN_FACE_3)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.sj2.csv", 
+        std::ifstream::in);
+    auto [N, M, test_sj3] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_sj3->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto sj3 = met.sj3();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto sj3i = sj3(i);
+            auto test = test_sj3->at((M * i) + j);
+            auto[passed, message] = test::approx(sj3i, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_sj3;
+
+ENDDEF_PROFILE
+/* */
+DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SURFACE_JACOBIAN_FACE_4)
+
+    std::ifstream f;
+    f.open(test_input_path + "test/metrics.sj4.csv", 
+        std::ifstream::in);
+    auto [N, M, test_sj4] = test::read_csv<double>(f);
+
+    ASSERT(N * M == test_sj4->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+
+    auto met = domain::metrics<D>(test_domain_N, test_domain_N);
+    
+    auto sj4 = met.sj4();
+
+    for (std::size_t i = 0; i < N; ++i) {
+        for (std::size_t j = 0; j < M; ++j) {
+            auto sj4i = sj4(i);
+            auto test = test_sj4->at((M * i) + j);
+            auto[passed, message] = test::approx(sj4i, test);
+            ASSERT(passed, message);
+        }    
+    }
+
+    delete test_sj4;
+
+ENDDEF_PROFILE

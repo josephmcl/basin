@@ -51,6 +51,9 @@ template <typename T> struct linrange {
     linrange() = default;
     linrange(T from, T to, std::size_t size): _size(size), from(from), 
         to(to), space((to - from) / static_cast<T>(size - 1)) {}
+    linrange(linrange<T> const &lr, bool transforms=true): 
+        _size(lr._size), from(lr.from), to(lr.to), space(lr.space), 
+        transforms(transforms? lr.transforms: std::vector<T(*)(T)>()){}
     struct iterator {
         
         std::size_t index;
@@ -68,11 +71,11 @@ template <typename T> struct linrange {
 
         iterator() {}; /* constructible_from */
         iterator(std::size_t index, linrange const *Linrange): 
-            index(index), Linrange(Linrange) {}
+            index(index), Linrange(Linrange) { value(); }
 
         T &operator *() { return this->value(); }
-        std::add_const_t<T &> operator * () const { this->value(); } 
-        I &operator ++ () { /* weakly_incrementable */ 
+        std::add_const_t<T &> operator *() const { this->value(); } 
+        I &operator ++() { /* weakly_incrementable */ 
             _inc_impl(); return *this; } 
         I operator ++(int) { /* incrementable */ 
             I temp = *this; ++*this; return temp; }     
@@ -80,11 +83,57 @@ template <typename T> struct linrange {
             _dec_impl(); return *this; }             
         I operator --(int) { /* incrementable */ 
             I temp = *this; --*this; return temp; }  
-        I &operator = (I const &lhs); /* assignable_from */
-        bool operator == (const I &other) /* equality_comparable */
-            const { return index == other.index; }
-        bool operator != (const I &other) const { 
-            return !(*this == other); } 
+        //inline I &operator = (Type* rhs) {_ptr = rhs; return *this;}
+        inline I &operator = (I const &that) {index = that.index; return *this;}
+        /* assignable_from */
+        bool operator == (const I &that) /* equality_comparable */
+            const { return index == that.index; }
+        bool operator != (const I &that) const { 
+            return !(index == that.index); } 
+
+        bool operator < (I const &that) const { 
+            return _value < that._value; }
+
+        bool operator > (I const &that) const { 
+            return _value > that._value; } 
+
+        bool operator <= (I const &that) const { 
+            return _value <= that._value; }
+
+        bool operator >= (I const &that) const { 
+            return _value >= that._value; } 
+
+        inline std::iter_difference_t<I> operator - (I const &that) const { 
+            return iterator{index - that.index, Linrange}; } 
+
+        inline I operator - (std::size_t const &n) const { 
+            return iterator{index - n, Linrange}; } 
+
+        inline I &operator -= (std::size_t const &that) { 
+            index -= that; return *this; } 
+
+        friend inline I 
+        operator - (const std::size_t &lhs, const I &rhs) {
+            return iterator{lhs + rhs.index, rhs.Linrange}; } 
+
+        inline std::iter_difference_t<I> 
+        operator + (I const &that) const { 
+            return iterator{index + that.index, Linrange}; } 
+
+        inline I 
+        operator + (std::size_t const &n) const { 
+            return iterator{index + n, Linrange}; } 
+
+        inline I &operator += (std::size_t const &that) { 
+            index += that; return *this; } 
+
+        friend inline I 
+        operator + (const std::size_t &lhs, const I &rhs) {
+            return iterator{lhs + rhs.index, rhs.Linrange}; } 
+
+        inline std::iter_reference_t<I> 
+        operator[](const std::size_t &n) const { 
+            index = n; return *this;}
 
         void _inc_impl() { 
             index += 1; 
@@ -101,6 +150,7 @@ template <typename T> struct linrange {
             for (auto &t : Linrange->transforms)
                 _value = t(_value);  
             return _value; }
+
     };
     
     /* std::forward_range constraints */
@@ -110,8 +160,36 @@ template <typename T> struct linrange {
     auto size()  const noexcept { return _size; }; 
     auto operator [](std::size_t const index) const noexcept {
         return iterator{std::clamp(index, std::size_t(0), 
-            std::size_t(_size)), this}; };
+            std::size_t(_size)), this}; 
+    };
 
+    template <typename R>
+    linrange<T> &operator |=(R r) {
+        transforms.push_back(r);
+        return *this;
+    }
+
+    linrange<T> clip(std::size_t start, std::size_t stop) const {
+        T to   = this->from + ((stop + 1)  * space); 
+        T from = this->from + (start * space); 
+        std::size_t size = _size - start - (_size - (stop + 1));
+        auto that = linrange(from, to, size);
+        that.transforms = transforms;
+        return that;
+    }
+
+    iterator min_element() {
+        auto first = begin();
+        auto last  = end();
+        if (first == last) return last;
+        iterator smallest = first;
+        ++first;
+        for (; first != last; ++first) {
+            if (*first < *smallest)
+                    smallest = first;
+        }
+        return smallest;
+    }
     
 };  
 
@@ -120,5 +198,4 @@ template <typename T> struct linrange {
         t.transforms.push_back(r);
         return t;
     }
-
 }

@@ -35,7 +35,7 @@ objects_&_test_objects := $(filter-out $(object_directory)/$(entrypoint).o, \
 rm = rm -f
 
 gccflags = -std=c++2a -Wall -Wpedantic -g \
-		   -fconcepts-diagnostics-depth=1 -finput-charset=UTF-8
+		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8
 
 compiler_flags := $(gccflags)
 includes := -I./$(header_directory) 

@@ -1,6 +1,7 @@
 #pragma once 
 #include <vector>
-#include <cmath>
+#include <cmath> 
+#include <tgmath.h>
 #include <functional>
 #include <iostream>
 
@@ -126,7 +127,6 @@ struct metrics {
         double constexpr c  = (D.length / 2) / D.basin_depth;
         double constexpr r̄  = (D.length / 2) * (D.length / 2); 
         double constexpr rw = 1 + (D.length / 2) / D.basin_depth; 
-
         auto _μ  =  physical::μ<D.μ_in, D.μ_out, c, r̄, rw>();
         return [_ys, _j, _x, _y, _μ](std::size_t i, std::size_t j){
         return (*_ys[j] * *_ys[j] * _μ(*_x[i], *_y[j])) / _j(i, j);};}
@@ -139,12 +139,48 @@ struct metrics {
         double constexpr c  = (D.length / 2) / D.basin_depth;
         double constexpr r̄  = (D.length / 2) * (D.length / 2); 
         double constexpr rw = 1 + (D.length / 2) / D.basin_depth; 
-        auto _μ  =  physical::μ<D.μ_in, D.μ_out, c, r̄, rw>();
+        auto constexpr   _μ = physical::μ<D.μ_in, D.μ_out, c, r̄, rw>();
         return [_xr, _j, _x, _y, _μ](std::size_t i, std::size_t j){
         return (*_xr[i] * *_xr[i] * _μ(*_x[i], *_y[j])) / _j(i, j);};}
 
-};
+    auto η() {
+        auto _x = *x()[0];
+        auto _y = y();
+        double constexpr c  = (D.length / 2) / D.basin_depth;
+        double constexpr r̄  = (D.length / 2) * (D.length / 2); 
+        double constexpr rw = 1 + (D.length / 2) / D.basin_depth; 
+        auto constexpr _μ = physical::μ<D.μ_in, D.μ_out, c, r̄, rw>();
+        auto constexpr _ρ = physical::ρ<D.ρ_in, D.ρ_out, c, r̄, rw>();
+        return [_x, _y, _μ, _ρ](std::size_t i){
+                double μ = _μ(_x, *_y[i]);
+        return μ / (2 * std::sqrt(μ / _ρ(_x, *_y[i])));};}
 
-    
+    auto μf2() {
+        auto _x = *x()[r_size + 1];
+        auto _y = y();
+        double constexpr c  = (D.length / 2) / D.basin_depth;
+        double constexpr r̄  = (D.length / 2) * (D.length / 2); 
+        double constexpr rw = 1 + (D.length / 2) / D.basin_depth;
+        auto constexpr _μ = physical::μ<D.μ_in, D.μ_out, c, r̄, rw>();
+        return [_x, _y, _μ](std::size_t i){
+        return _μ(_x, *_y[i]);};}
+
+    auto sj1() {
+        auto _ys = ys();
+        return [_ys](std::size_t i){ return *_ys[i]; }; }
+
+    auto sj2() {
+        auto _ys = ys();
+        return [_ys](std::size_t i){ return *_ys[i]; }; }
+
+    auto sj3() {
+        auto _ys = ys();
+        return [_ys](std::size_t i){ return *_ys[i]; }; }
+
+    auto sj4() {
+        auto _ys = ys();
+        return [_ys](std::size_t i){ return *_ys[i]; }; }
+
+    };
 
 } /* namespace domain */
