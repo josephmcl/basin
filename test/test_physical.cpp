@@ -18,9 +18,9 @@ DEFINE_PROFILE(TEST_PHYSICAL_PARAMS_BFACE)
     std::ifstream f;
     f.open(test_input_path + "test/physical_params.b.csv", 
         std::ifstream::in);
-    auto m = test::read_csv<double>(f);
+    auto [columns, rows, test_data] = test::read_csv<double>(f);
 
-    ASSERT(std::get<0>(m) * std::get<1>(m) == std::get<2>(m)->size(), 
+    ASSERT(columns * rows == test_data->size(), 
         "Sanity check failed, input matrix x dims N × M ≠ |x|.");
 
     auto met = domain::metrics<D>(400., 400.);
@@ -30,17 +30,17 @@ DEFINE_PROFILE(TEST_PHYSICAL_PARAMS_BFACE)
 
     auto [σn, a, faceb, Dc, f0, V0, τ_inf, Vp] = RP;
 
-    ASSERT(std::get<1>(m) == faceb.size(), "faceb linrange is a "
+    ASSERT(rows == faceb.size(), "faceb linrange is a "
         "different size than test input b.");
 
-    for (std::size_t i = 0; i < std::get<1>(m); ++i) {
+    for (std::size_t i = 0; i < rows; ++i) {
         auto facebi = *faceb[i];
-        auto test = std::get<2>(m)->at(i);
+        auto test = test_data->at(i);
         auto[passed, message] = test::approx(facebi, test);
         ASSERT(passed, message);
     }
 
-    delete std::get<2>(m);
+    delete test_data;
 
 ENDDEF_PROFILE
 
