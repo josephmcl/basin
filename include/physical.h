@@ -53,19 +53,7 @@ auto fault_params(numerics::linrange<T> const &face) {
             return bmin;
         else
             return bmin; };
-
-    std::cout << std::setprecision(14);
-
-    for (auto i : faceb) 
-        std::cout << i << ", ";
-    std::cout << std::endl;
-
-    std::cout << faceb.size() << std::endl;
-
-    std::cout << *face[δ.index] << std::endl;
-    std::cout << *face[g.index] << std::endl;
-    std::cout << *face[v.index] << std::endl;
-
+        
     double constexpr σn    = 50.;
     double constexpr a     =  0.015;
     double constexpr Dc    =  0.008;
@@ -74,7 +62,7 @@ auto fault_params(numerics::linrange<T> const &face) {
     double constexpr τ_inf = 24.82;
     double constexpr Vp    =  1e-9;
 
-    return std::make_tuple(δ.index, g.index, std::make_tuple(
+    return std::make_tuple(δ.index, g.index, v.index, std::make_tuple(
         σn, a, faceb, Dc, f0, V0, τ_inf, Vp)); }
 
 } /* physical:: */

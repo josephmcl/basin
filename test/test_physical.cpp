@@ -26,20 +26,18 @@ DEFINE_PROFILE(TEST_PHYSICAL_PARAMS_BFACE)
     auto met = domain::metrics<D>(400., 400.);
     auto y = met.y();
 
-    auto [δ, g, RP] = physical::fault_params(y);
+    auto [δ, g, v, RP] = physical::fault_params(y);
 
     auto [σn, a, faceb, Dc, f0, V0, τ_inf, Vp] = RP;
 
     ASSERT(std::get<1>(m) == faceb.size(), "faceb linrange is a "
         "different size than test input b.");
 
-    for (std::size_t i = 0; i < std::get<0>(m); ++i) {
-        for (std::size_t j = 0; j < std::get<1>(m); ++j) {
-            auto facebi = *faceb[i];
-            auto test = std::get<2>(m)->at((std::get<0>(m) * i) + j);
-            auto[passed, message] = test::approx(facebi, test);
-            ASSERT(passed, message);
-        }    
+    for (std::size_t i = 0; i < std::get<1>(m); ++i) {
+        auto facebi = *faceb[i];
+        auto test = std::get<2>(m)->at(i);
+        auto[passed, message] = test::approx(facebi, test);
+        ASSERT(passed, message);
     }
 
     delete std::get<2>(m);
