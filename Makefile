@@ -29,8 +29,15 @@ test_target := lab
 nil := 
 space := $(nil) $(nil)
 
-objects_&_test_objects := $(filter-out $(object_directory)/$(entrypoint).o, \
-	$(join $(join$(objects), $(space)), $(test_objects)))
+# The testing framework needs access to both, the project objects and  
+# test framework objects. However, it should not include any other 
+# entrypoint objects.
+objects_and_test_objects = $(nil)
+objects_and_test_objects += $(filter-out \
+	$(object_directory)/$(entrypoint).o, $(objects))
+objects_and_test_objects += $(test_objects)
+#, \
+#	$(join $(join $(objects), $(space)), $(test_objects)))
 
 rm = rm -f
 
@@ -38,8 +45,16 @@ gccflags = -std=c++2a -Wall -Wpedantic -g \
 		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8
 
 compiler_flags := $(gccflags)
-includes := -I./$(header_directory) 
+
+openblas_include := -I/usr/local/opt/openblas/include
+petsc_include := -I/usr/local/opt/petsc/include
+openmpi_include := -I/usr/local/opt/open-mpi/include
+includes := -I./$(header_directory) $(petsc_include) $(openmpi_include)
 test_includes := $(includes) -I./$(test_directory)
+
+ # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
+ libraries := -L/usr/local/opt/petsc/lib -lpetsc -lpthread \
+ 			  -L/usr/local/opt/open-mpi/lib -lmpi
 
 define speaker
 	@echo [make:$$PPID] $(1)
@@ -48,11 +63,14 @@ endef
 
 $(binary_directory)/$(target): $(objects)
 	$(call speaker,\
-	$(cc) $(objects) -o $@)
+	$(cc) $(objects) -o $@ $(libraries))
 
 $(binary_directory)/$(test_target): $(objects) $(test_objects)
+	@echo $(objects)
+	@echo $(test_objects)
+	@echo $(objects_and_test_objects)
 	$(call speaker,\
-	$(cc) $(objects_&_test_objects) -o $@)
+	$(cc) $(objects_and_test_objects) -o $@ $(libraries))
 
 $(objects): $(object_directory)/%.o : $(source_directory)/%.$(source_ext)
 	$(call speaker,\

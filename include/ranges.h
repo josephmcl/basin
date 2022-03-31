@@ -49,7 +49,7 @@ template <typename T> struct linrange {
     T const from, to, space;
     std::vector<T(*)(T)> transforms = {};
     linrange() = default;
-    linrange(T from, T to, std::size_t size): _size(size), from(from), 
+    linrange(T from, T to, std::size_t size=1): _size(size), from(from), 
         to(to), space((to - from) / static_cast<T>(size - 1)) {}
     linrange(linrange<T> const &lr, bool transforms=true): 
         _size(lr._size), from(lr.from), to(lr.to), space(lr.space), 
@@ -164,7 +164,7 @@ template <typename T> struct linrange {
     };
 
     template <typename R>
-    linrange<T> &operator |=(R r) {
+    linrange<T> &operator |= (R r) {
         transforms.push_back(r);
         return *this;
     }

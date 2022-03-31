@@ -2,4 +2,5 @@
 object/
 lab
 main
+.env
 

@@ -53,7 +53,7 @@ auto fault_params(numerics::linrange<T> const &face) {
             return bmin;
         else
             return bmin; };
-        
+
     double constexpr σn    = 50.;
     double constexpr a     =  0.015;
     double constexpr Dc    =  0.008;
@@ -66,49 +66,3 @@ auto fault_params(numerics::linrange<T> const &face) {
         σn, a, faceb, Dc, f0, V0, τ_inf, Vp)); }
 
 } /* physical:: */
-
-
-/* 
-
-function fault_params(fc)
-
-    
-    Wf = 24
-    Hvw = 12
-    Ht = 6
-    δNp = findmin(abs.(Wf .- fc))[2]
-    gNp = findmin(abs.(16 .- fc))[2]
-    VWp = findmin(abs.((Hvw + Ht) .- fc))[2]
-    a = .015
-    b0 = .02
-    bmin = 0.0
-    
-    
-    function b_fun(y)
-        if 0 <= y < Hvw
-            return b0
-        end
-        if Hvw <= y < Hvw + Ht
-            return b0 + (bmin - b0)*(y-Hvw)/Ht
-        end
-        if Hvw + Ht <= y < Wf
-            return bmin
-        end
-        return bmin
-    end
-
-    
-    RS = (σn = 50.0,
-          a = a,
-          b = b_fun.(fc[1:δNp]),
-          Dc = .008,
-          f0 = .6,
-          V0 = 1e-6,
-          τ_inf = 24.82,
-          Vp = 1e-9)
-
-
-    return δNp, gNp, VWp, RS
-    
-end
-*/

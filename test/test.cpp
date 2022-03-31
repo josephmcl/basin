@@ -1,8 +1,11 @@
 #include "test_ranges.h"
 #include "test_domain.h"
 #include "test_physical.h"
+#include "test_operators.h"
 
 int main(int argc, char **argv) {
+
+    test::test(TEST_HI_OPERATOR);
 
     test::test(TEST_PHYSICAL_PARAMS_BFACE);
 
