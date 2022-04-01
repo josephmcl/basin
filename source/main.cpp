@@ -27,10 +27,17 @@ int main (int argc, char *argv[]) {
     /* Construct the grid. */
     auto metrics = domain::metrics<D>(400, 400);
 
-    physical::fault_params(metrics.y());
+    auto fault_params = physical::fault_params(metrics.y());
 
     numerical::operators operators = {};
 
+    std::vector<double> ψδ;
+    domain::intitial_conditions(metrics, fault_params, ψδ);
+
+    std::cout << std::setprecision(15);
+    for (auto &i: ψδ) 
+        std::cout << i << ", "; 
+    std::cout << std::endl;
 
     } infrastructure::cleanup(); return 0;
 

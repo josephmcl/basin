@@ -4,6 +4,8 @@
 #include "test_operators.h"
 
 int main(int argc, char **argv) {
+    
+    test::test(TEST_INITIAL_CONDITIONS);
 
     test::test(TEST_HI_OPERATOR);
 

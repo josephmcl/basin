@@ -4,6 +4,7 @@
 #include <tgmath.h>
 #include <functional>
 #include <iostream>
+#include <iomanip>
 
 #include "physical.h"
 #include "ranges.h"
@@ -182,5 +183,35 @@ struct metrics {
         return [_ys](std::size_t i){ return *_ys[i]; }; }
 
     };
+
+
+template<typename T, data D> 
+void intitial_conditions(metrics<D> &m, physical::fault_param<T> 
+    const &fp, std::vector<T> &res) {
+
+
+    auto [δ, g, v, rp] = fp;
+    auto [σn, a, faceb, Dc, f0, V0, τ_inf, Vp] = rp;
+    auto η = m.η();
+
+    auto size = (m.r_size + 1) * 2;
+    res = std::vector(size, 0.);
+
+    for (auto i = 0; i < m.r_size + 1; ++i)
+        res[i] = a * std::log(2 * (V0 / Vp) * std::sinh((τ_inf - η(i) 
+                 * Vp) / (σn * a)));
+
+    for (auto i = δ + 1; i < size; ++i)
+        res[i] = 0.;
+
+    return;
+}
+
+// ψδ = zeros(2nn)
+//      for n in 1:nn
+//             ψδ[n] = RS.a * log(2*(RS.V0/RS.Vp) * sinh((RS.τ_inf - η[n]*RS.Vp)/(RS.σn*RS.a)))
+//       end
+//         ψδ[δNp .+ (1:nn)] .= 0
+
 
 } /* namespace domain */

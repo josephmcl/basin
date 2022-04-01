@@ -1,9 +1,11 @@
 #pragma once
 #include <cmath>
 #include <tuple>
-#include "ranges.h"
-
+#include <vector>
 #include <iomanip>
+
+#include "ranges.h"
+#include "domain.h"
 
 namespace physical {
 
@@ -19,9 +21,13 @@ auto constexpr ρ() noexcept {
         x + c * c * y * y - r̄) / rw) + 1.) + in; }; }
 
 
+template <typename T>
+using fault_param = std::tuple<std::size_t, std::size_t, std::size_t, 
+    std::tuple<double, double, numerics::linrange<T>, double, double,
+    double, double, double>>;
 
 template<typename T>
-auto fault_params(numerics::linrange<T> const &face) {
+fault_param<T> fault_params(numerics::linrange<T> const &face) {
 
     using namespace numerics;
 

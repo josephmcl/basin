@@ -11,7 +11,7 @@
 #include "ranges.h"
 
 #include <petscsys.h>
-
+#include <petscmat.h> 
 
 namespace numerical {
 

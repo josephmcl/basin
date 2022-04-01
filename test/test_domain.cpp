@@ -402,3 +402,37 @@ DEFINE_PROFILE(TEST_TEST_INPUT_METRICS_SURFACE_JACOBIAN_FACE_4)
     delete test_sj4;
 
 ENDDEF_PROFILE
+
+DEFINE_PROFILE(TEST_INITIAL_CONDITIONS)
+
+    std::ifstream f;
+    f.open("./test_data/ic.csv", std::ifstream::in);
+    auto [rows, cols, test_ics] = test::read_csv<double>(f);
+
+    ASSERT(rows * cols == test_ics->size(),
+        "Sanity check failed, input matrix ji dims N × M ≠ |ji|.");
+    
+    auto metrics = domain::metrics<D>(400, 400);
+
+    auto fault_params = physical::fault_params(metrics.y());
+
+    numerical::operators operators = {};
+
+    std::vector<double> ics;
+    domain::intitial_conditions(metrics, fault_params, ics);
+
+    std::cout << ics.size() << " " << cols << std::endl;
+    ASSERT(ics.size() == cols, "Initial conditions size do not match " 
+        "test case size.");
+
+    for (std::size_t i = 0; i < cols; ++i) {
+
+        auto iics = ics[i];
+        auto test = test_ics->at(i);
+        auto[passed, message] = test::approx(iics, test);
+        ASSERT(passed, message); 
+    }
+
+    delete test_ics;
+
+ENDDEF_PROFILE

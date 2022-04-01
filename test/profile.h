@@ -9,6 +9,7 @@ Core profiling and testing infrastructure for small C++ projects. */
 #include <sstream>
 #include <tuple>
 #include <cmath>
+#include <cstdlib>
 
 /* High-level usage: 
 
@@ -75,4 +76,5 @@ namespace test {
 
         if (picky && !success) exit(-1);
     }
+
 }
