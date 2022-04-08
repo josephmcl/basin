@@ -6,6 +6,7 @@
 #include <iostream>
 #include <array>
 #include <algorithm>
+#include <tuple>
 
 #include "definitions.h"
 #include "ranges.h"
@@ -31,8 +32,27 @@ struct operators {
     std::vector<ℝ> H_inverse(
         ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
 
-    void D1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
-            ℝ const right=1., result &std::vector<ℝ>);
+    struct D1 {
+
+        using row_t = std::tuple<ℤ, std::vector<ℝ> const *>;
+
+        ℤ const size, order; 
+        ℝ const left, right, grid_size;
+
+        std::vector<ℝ> d;
+        std::vector<std::vector<ℝ>> top, bottom;
+
+        Mat _petsc_repr;
+
+        D1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
+            ℝ const right=1.);
+
+        /*  Given a const reference to an index, return a reference to 
+            a vector of tuples of (size_t, long double) representing 
+            the index and the value of rows. */
+        row_t row(ℤ const index) const;
+
+    };
 
 };
     
