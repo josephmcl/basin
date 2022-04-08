@@ -24,11 +24,16 @@ struct operators {
 
     operators(){};
     
+    /* Returns finite difference H matrix. */
     std::vector<ℝ> H(
         ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
 
     std::vector<ℝ> H_inverse(
         ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
+
+    void D1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
+            ℝ const right=1., result &std::vector<ℝ>);
+
 };
     
 
@@ -37,7 +42,7 @@ template<typename container>
 auto hinv_transform(container tail, std::size_t stop) -> long double(*)(long double){
     return [tail, stop](long double x){
         x = std::clamp(std::abs(x - (stop / 2)) - (stop / 2) + tail.size(), 0, tail.size());
-        return stop * tail[x];
+        return stop * tail[x]; 
     };
 }
 

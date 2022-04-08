@@ -2,6 +2,8 @@
 # 
 #
 
+include .env
+
 target = main
 
 cc = g++-11
@@ -46,15 +48,21 @@ gccflags = -std=c++2a -Wall -Wpedantic -g \
 
 compiler_flags := $(gccflags)
 
-openblas_include := -I/usr/local/opt/openblas/include
-petsc_include := -I/usr/local/opt/petsc/include
-openmpi_include := -I/usr/local/opt/open-mpi/include
-includes := -I./$(header_directory) $(petsc_include) $(openmpi_include)
+openblas_include := -I$(OPENBLAS_INCLUDE)
+petsc_include    := -I${PETSC_INCLUDE}
+openmpi_include  := -I${OPENMPI_INCLUDE}
+cernroot_include := -I${CERN_ROOT_INCLUDE}
+
+includes := -I./$(header_directory) $(petsc_include) \
+	$(openmpi_include) $(cernroot_include)
+
 test_includes := $(includes) -I./$(test_directory)
+
+cernroot_library := -L${CERN_ROOT_LIBRARY}
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
  libraries := -L/usr/local/opt/petsc/lib -lpetsc -lpthread \
- 			  -L/usr/local/opt/open-mpi/lib -lmpi
+ 			  -L/usr/local/opt/open-mpi/lib -lmpi $(cernroot_library)
 
 define speaker
 	@echo [make:$$PPID] $(1)
@@ -72,7 +80,7 @@ $(binary_directory)/$(test_target): $(objects) $(test_objects)
 	$(call speaker,\
 	$(cc) $(objects_and_test_objects) -o $@ $(libraries))
 
-$(objects): $(object_directory)/%.o : $(source_directory)/%.$(source_ext)
+$(objects): $(object_directory)/%.o: $(source_directory)/%.$(source_ext)
 	$(call speaker,\
 	$(cc) $(compiler_flags) -c $< -o $@ $(includes))
 
