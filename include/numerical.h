@@ -32,28 +32,33 @@ struct operators {
     std::vector<ℝ> H_inverse(
         ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
 
-    struct D1 {
-
+    struct sbp {
         using row_t = std::tuple<ℤ, std::vector<ℝ> const *>;
-
         ℤ const size, order; 
         ℝ const left, right, grid_size;
-
         std::vector<ℝ> d;
         std::vector<std::vector<ℝ>> top, bottom;
-
         Mat _petsc_repr;
-
-        D1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
+        sbp(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
             ℝ const right=1.);
-
         /*  Given a const reference to an index, return a reference to 
             a vector of tuples of (size_t, long double) representing 
             the index and the value of rows. */
         row_t row(ℤ const index) const;
-
+    };
+    struct d1: sbp {
+        d1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
+           ℝ const right=1.) : sbp(size, order, left, right) {
+            load_operator(); };
+        void load_operator();
     };
 
+    struct d2: sbp {
+        d2(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
+           ℝ const right=1.) : sbp(size, order, left, right) {
+            load_operator(); };
+        void load_operator();
+    };
 };
     
 
