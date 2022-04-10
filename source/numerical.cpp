@@ -117,6 +117,16 @@ numerical::operators::sbp::row(std::size_t const index) const {
     else { throw; }
 }
 
+void numerical::operators::sbp::
+product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs) {
+    for (std::size_t i = 0; i != lhs.size(); ++i) {
+        auto [column, r] = row(i);
+        for (std::size_t j = 0; j != r->size(); ++j) {
+            lhs[i] += r->at(j) * rhs[column + j];
+        }
+    }
+}
+
 void numerical::operators::d1::load_operator() {
 /* Set the operator values in the struct. */
     if (order == 2) {

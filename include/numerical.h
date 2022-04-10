@@ -45,6 +45,10 @@ struct operators {
             a vector of tuples of (size_t, long double) representing 
             the index and the value of rows. */
         row_t row(ℤ const index) const;
+
+        /* dense vector product: lhs = this * rhs */
+        void product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs);
+
     };
     struct d1: sbp {
         d1(ℤ const &size, ℤ const &order=2, ℝ const left=-1., 
