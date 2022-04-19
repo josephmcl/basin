@@ -44,7 +44,7 @@ objects_and_test_objects += $(test_objects)
 rm = rm -f
 
 gccflags = -std=c++2a -Wall -Wpedantic -g \
-		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8
+		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8 
 
 compiler_flags := $(gccflags)
 
@@ -54,7 +54,7 @@ openmpi_include  := -I${OPENMPI_INCLUDE}
 cernroot_include := -I${CERN_ROOT_INCLUDE}
 
 includes := -I./$(header_directory) $(petsc_include) \
-	$(openmpi_include) $(cernroot_include)
+	$(openmpi_include) # $(cernroot_include)
 
 test_includes := $(includes) -I./$(test_directory)
 
@@ -62,7 +62,7 @@ cernroot_library := -L${CERN_ROOT_LIBRARY}
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
  libraries := -L/usr/local/opt/petsc/lib -lpetsc -lpthread \
- 			  -L/usr/local/opt/open-mpi/lib -lmpi $(cernroot_library)
+ 			  -L/usr/local/opt/open-mpi/lib -lmpi # $(cernroot_library)
 
 define speaker
 	@echo [make:$$PPID] $(1)

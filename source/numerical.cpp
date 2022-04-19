@@ -89,12 +89,11 @@ std::vector<real_t> numerical::operators::H(std::size_t nodes,
 
     return H; }
 
-numerical::operators::sbp::
-sbp(ℤ const &size, ℤ const &order, ℝ const left, ℝ const right): 
+numerical::operators::sbp::sbp(
+    std::size_t const size, std::size_t const order, 
+    real_t const left, real_t const right): 
     size(size), order(order), left(left), right(right), 
-    grid_size((right - left) / static_cast<ℝ>(size - 1)) {
-
-}
+    grid_size((right - left) / static_cast<ℝ>(size - 1)) { }
 
 std::tuple<std::size_t, std::vector<real_t> const *>
 numerical::operators::sbp::row(std::size_t const index) const {
@@ -117,6 +116,40 @@ numerical::operators::sbp::row(std::size_t const index) const {
     else { throw; }
 }
 
+std::tuple<std::size_t, std::vector<real_t> const >
+numerical::operators::sbp::rowf(std::size_t const index) const {
+
+    std::size_t j;
+    auto res = std::vector<real_t>();
+
+    if (index < top.size()) {
+        j = 0;
+        res = top[index];
+    }  
+    else if (index < size - bottom.size()) {
+        // Adjust column index for kernel size. 
+        j = index - ((d.size() - 1) / 2);
+        res = d;
+    }
+    else if (index < size) {
+        // Find logical index from explicitly stored kernel.
+        auto i = index - (size - bottom.size());
+        // Adjust column index for kernel size.
+        j = size - bottom[i].size();
+        res = bottom[i];
+    }
+    else { throw; }
+
+    // Apply the grid spacing "H" matrix. 
+    for (std::size_t i = 0; i < res.size(); ++i) {
+        res[i] *= h[j + i];
+    } 
+
+    return std::make_tuple(j, res);
+}
+
+/*
+
 void numerical::operators::sbp::
 product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs) {
     for (std::size_t i = 0; i != lhs.size(); ++i) {
@@ -127,8 +160,10 @@ product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs) {
     }
 }
 
+*/
+
 void numerical::operators::d1::load_operator() {
-/* Set the operator values in the struct. */
+    /* Set the operator values in the struct. */
     if (order == 2) {
         d = d_p2;
         top = bd_p2;
@@ -164,7 +199,7 @@ void numerical::operators::d1::load_operator() {
 }
 
 void numerical::operators::d2::load_operator() {
-/* Set the operator values in the struct. */
+    /* Set the operator values in the struct. */
     if (order == 2) {
         d = d2_p2;
         top = bd2_p2;
@@ -200,3 +235,40 @@ void numerical::operators::d2::load_operator() {
         }
     }
 }
+
+void numerical::operators::d2::fuse(std::vector<ℝ> const &diag) {
+    for (std::size_t i = 0; i < size; ++i) h[i] = diag[i];
+}
+
+void numerical::operators::d2::fuse_hi(std::vector<ℝ> const &diag) {
+    for (std::size_t i = 0; i < size; ++i) hi[i] = diag[i];
+}
+
+void numerical::operators::d2::
+left_boundary(real_t value, std::size_t order) {
+    
+    if (order == 1) {
+        top[0][0] = value * hi[0];
+    }
+}
+
+void numerical::operators::d2::
+right_boundary(real_t value, std::size_t order) {
+    
+    auto i = bottom.size() - 1;
+    auto j = bottom[i].size() - 1;
+
+    if (order == 1) {
+        
+        bottom[i][j] = value * hi[size - 1];
+    }
+    if (order == 2) {
+        // TODO e_n needs the next bit 
+        real_t grid_size = (right - left) / static_cast<real_t>(size - 1);
+        std::cout << 1 / grid_size << std::endl;
+        bottom[i][j] = value * hi[size - 1];
+    }
+}
+
+
+

@@ -1,6 +1,7 @@
 #pragma once 
 
 #include <cmath>
+#include <iostream>
 
 /* Given a positive definite matrix A, an guess vector x, a vector b, a 
 tolerance ϵ, and an maximum iteration count itermax, solve the form 
@@ -28,6 +29,11 @@ namespace solve {
 
     struct conj_grad {
 
+        // The problem size. The length of x and b. The length of any 
+        // side of A. 
+        std::size_t const size;
+        bool converged = false;
+
         // matrix_action(T const &b, T &a) ie. a = Ab
         MatrixAction matrix_action; 
 
@@ -53,12 +59,13 @@ namespace solve {
             VectorType &x, 
             VectorType const &b, 
             DataType ϵ, 
-            std::size_t size,
             std::size_t itermax=100) {
 
             VectorType temp(size), r(size), r_prior(size), p(size), 
                 q(size), p_prior(size);
             DataType ρ_prior, ρ, δ, error;
+
+            converged = false;
 
             /* r_prior = A * x - b */
             matrix_action(x, r_prior);
@@ -98,8 +105,12 @@ namespace solve {
                 /* Compute error. */ 
                 error = std::sqrt(vtv_prod(r, r)) 
                       / std::sqrt(vtv_prod(x, x));
-
-                if (error <= ϵ) break;
+                
+                if (error <= ϵ) {
+                    
+                    converged = true;
+                    break;
+                }
 
                 // ρ = r' * r
                 ρ = vtv_prod(r, r);
