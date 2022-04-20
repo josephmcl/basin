@@ -101,6 +101,12 @@ struct operators {
     };
 
     struct d2: sbp {
+
+        
+        std::vector<ℝ> d1_interior;
+        std::vector<ℝ> h, hi;
+        std::vector<std::vector<ℝ>> d1_top, d1_bottom;
+
         d2(ℤ const size, ℤ const order=2, ℝ const left=-1., 
            ℝ const right=1.) : sbp(size, order, left, right) {
             load_operator(); 
@@ -110,8 +116,8 @@ struct operators {
         void load_operator();
         void fuse(std::vector<ℝ> const &diag);
         void fuse_hi(std::vector<ℝ> const &diag);
-        void left_boundary(ℝ value, ℤ order = 1);
-        void right_boundary(ℝ value, ℤ order = 1);
+        void left_boundary(ℝ value, ℤ degree=1);
+        void right_boundary(ℝ value, ℤ degree=1);
     };
 
 

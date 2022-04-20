@@ -141,9 +141,9 @@ numerical::operators::sbp::rowf(std::size_t const index) const {
     else { throw; }
 
     // Apply the grid spacing "H" matrix. 
-    for (std::size_t i = 0; i < res.size(); ++i) {
-        res[i] *= h[j + i];
-    } 
+    // for (std::size_t i = 0; i < res.size(); ++i) {
+    //     res[i] *= h[j + i];
+    // } 
 
     return std::make_tuple(j, res);
 }
@@ -162,40 +162,53 @@ product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs) {
 
 */
 
-void numerical::operators::d1::load_operator() {
-    /* Set the operator values in the struct. */
+static void load_d1_operator(
+    std::size_t order,
+    real_t grid_size,
+    std::vector<real_t> &d1_interior,
+    std::vector<std::vector<real_t>> &d1_top,
+    std::vector<std::vector<real_t>> &d1_bottom) {
+
     if (order == 2) {
-        d = d_p2;
-        top = bd_p2;
-        bottom = bd_p2; 
+        d1_interior = d_p2;
+        d1_top      = bd_p2;
+        d1_bottom   = bd_p2; 
     }
     else if (order == 4) {
-        d = d_p4;
-        top = bd_p4;
-        bottom = bd_p4; 
+        d1_interior = d_p4;
+        d1_top      = bd_p4;
+        d1_bottom   = bd_p4; 
     }
 
-    std::vector<std::vector<real_t>> temp(bottom.size());
 
-    std::reverse_copy(std::begin(bottom), std::end(bottom), 
+    std::vector<std::vector<real_t>> temp(d1_bottom.size());
+
+    std::reverse_copy(std::begin(d1_bottom), std::end(d1_bottom), 
         std::begin(temp));
-    bottom.clear();
+    d1_bottom.clear();
 
     for (std::size_t i = 0; i != temp.size(); ++i) {
-        bottom.push_back(temp[i]);
-        std::reverse(bottom[i].begin(), bottom[i].end());
+        d1_bottom.push_back(temp[i]);
+        std::reverse(d1_bottom[i].begin(), d1_bottom[i].end());
     } 
 
-    for (std::size_t i = 0; i != d.size(); ++i) {
-        d[i] /= grid_size;
+    for (std::size_t i = 0; i != d1_interior.size(); ++i) {
+        d1_interior[i] /= grid_size;
     }
 
-    for (std::size_t i = 0; i != top.size(); ++i) {
-        for (std::size_t j = 0; j != top[i].size(); ++j) {
-            top[i][j] /= grid_size;
-            bottom[i][j] /= -grid_size;
-        }
+    for (std::size_t i = 0; i != d1_top.size(); ++i) {
+        for (std::size_t j = 0; j != d1_top[i].size(); ++j) {
+            d1_top[i][j] /= grid_size;
+            d1_bottom[i][j] /= -grid_size;
+        } 
     }
+}
+
+void numerical::operators::d1::load_operator() {
+    /* Set the operator values in the struct. */
+
+    load_d1_operator(order, grid_size, d, top, bottom);
+
 }
 
 void numerical::operators::d2::load_operator() {
@@ -234,6 +247,10 @@ void numerical::operators::d2::load_operator() {
             bottom[i][j] /= grid_size_square;
         }
     }
+
+    // Load the first derivative finite difference operator needed for 
+    // deriving boundary conditions.
+    load_d1_operator(order, grid_size, d1_interior, d1_top, d1_bottom);
 }
 
 void numerical::operators::d2::fuse(std::vector<ℝ> const &diag) {
@@ -245,7 +262,7 @@ void numerical::operators::d2::fuse_hi(std::vector<ℝ> const &diag) {
 }
 
 void numerical::operators::d2::
-left_boundary(real_t value, std::size_t order) {
+left_boundary(real_t value, std::size_t degree) {
     
     if (order == 1) {
         top[0][0] = value * hi[0];
@@ -253,7 +270,7 @@ left_boundary(real_t value, std::size_t order) {
 }
 
 void numerical::operators::d2::
-right_boundary(real_t value, std::size_t order) {
+right_boundary(real_t value, std::size_t degree) {
     
     auto i = bottom.size() - 1;
     auto j = bottom[i].size() - 1;
@@ -263,10 +280,13 @@ right_boundary(real_t value, std::size_t order) {
         bottom[i][j] = value * hi[size - 1];
     }
     if (order == 2) {
-        // TODO e_n needs the next bit 
-        real_t grid_size = (right - left) / static_cast<real_t>(size - 1);
-        std::cout << 1 / grid_size << std::endl;
-        bottom[i][j] = value * hi[size - 1];
+
+        auto &d2_bottom_row = bottom[bottom.size() - 1];
+        auto &d1_bottom_row = d1_bottom[d1_bottom.size() - 1];
+        for (std::size_t i = 0; i < d1_bottom_row.size(); ++i) {
+            d2_bottom_row[i] += hi[size - 1] * d1_bottom_row[i] * value;
+        }
+
     }
 }
 
