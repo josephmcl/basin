@@ -283,8 +283,9 @@ right_boundary(real_t value, std::size_t degree) {
 
         auto &d2_bottom_row = bottom[bottom.size() - 1];
         auto &d1_bottom_row = d1_bottom[d1_bottom.size() - 1];
+        auto offset = d2_bottom_row.size() - d1_bottom_row.size();
         for (std::size_t i = 0; i < d1_bottom_row.size(); ++i) {
-            d2_bottom_row[i] += hi[size - 1] * d1_bottom_row[i] * value;
+            d2_bottom_row[i + offset] += hi[size - 1] * d1_bottom_row[i] * value;
         }
 
     }
