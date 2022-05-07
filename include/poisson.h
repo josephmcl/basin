@@ -101,9 +101,9 @@ namespace poisson1d {
     domain_t domain=domain, 
     boundary_t boundary=boundary) {
         
-        long double β = 2.;
+        long double β = 1.;
         long double σ1 = -40.;
-        long double σ2 = 0.5;
+        long double σ2 = 1;
         long double ϵ = 1.;
 
         // Unpack tuples 
@@ -141,9 +141,9 @@ namespace poisson1d {
                 range_t(begin, end, local_domain_size));
         }
 
-    auto h = numerical::operators::H(local_domain_size, 2, left, right);
-    auto hi = numerical::operators::H_inverse(local_domain_size, 2, left, right);
-    vector_t bs = {(3./2.)/ spacing, -2./ spacing, (1./2.)/ spacing};
+    auto h = numerical::operators::H(local_domain_size, 2, 0, (right - left) / local_problems);
+    auto hi = numerical::operators::H_inverse(local_domain_size, 2, 0, (right - left) / local_problems);
+    vector_t bs = {(3./2.) / spacing, -2. / spacing, (1./2.) / spacing};
 
         
     /* Create a petsc object for the A matrix. */
@@ -159,20 +159,20 @@ namespace poisson1d {
       
       /* Initialize the first local skew row. */
       MatSetValue(A, local_offset, local_offset,  
-         1. / spacing_square * h[0], ADD_VALUES);
+         1. / spacing_square, ADD_VALUES);
       MatSetValue(A, local_offset, local_offset + 1, 
-        -2. / spacing_square * h[1], ADD_VALUES);
+        -2. / spacing_square, ADD_VALUES);
       MatSetValue(A, local_offset, local_offset + 2, 
-         1. / spacing_square * h[2], ADD_VALUES); 
+         1. / spacing_square, ADD_VALUES); 
 
       /* Initialize the final local skew row. */
       auto local_last_row = (i + 1) * local_domain_size;
       MatSetValue(A, local_last_row - 1, local_last_row - 3,  
-         1. / spacing_square * h[local_domain_size  - 3], ADD_VALUES);
+         1. / spacing_square, ADD_VALUES);
       MatSetValue(A, local_last_row - 1, local_last_row - 2, 
-        -2. / spacing_square * h[local_domain_size - 2], ADD_VALUES);
+        -2. / spacing_square, ADD_VALUES);
       MatSetValue(A, local_last_row - 1, local_last_row - 1, 
-         1. / spacing_square * h[local_domain_size - 1], ADD_VALUES); 
+         1. / spacing_square, ADD_VALUES); 
 
       /* Initialize the interior local diagonal rows. */
       for (auto it = local.begin() + 1; it != local.end() - 1; ++it) {  
@@ -180,52 +180,118 @@ namespace poisson1d {
         auto global_column_index = local_offset + it.index - 1;
 
         MatSetValue(A, global_row_index, global_column_index,  
-           1. / spacing_square * h[i], ADD_VALUES);
+           1. / spacing_square, ADD_VALUES);
         MatSetValue(A, global_row_index, global_column_index + 1, 
-          -2. / spacing_square * h[i + 1], ADD_VALUES);
+          -2. / spacing_square, ADD_VALUES);
         MatSetValue(A, global_row_index, global_column_index + 2, 
-           1. / spacing_square * h[i + 2], ADD_VALUES);  
+           1. / spacing_square, ADD_VALUES);  
       }
     }
 
     /* Set the second-order SAT terms for the left hand first-order
-       boundary. */
-    MatSetValue(A, 0, 0, β * hi[0] * bs[0] * h[0], ADD_VALUES);
-    MatSetValue(A, 1, 0, β * hi[0] * bs[1] * h[0], ADD_VALUES);
-    MatSetValue(A, 2, 0, β * hi[0] * bs[2] * h[0], ADD_VALUES);
+       boundary: β * HI1 * BS' * e0 * e0' */
+    MatSetValue(A, 0, 0, β * hi[0] * bs[0], ADD_VALUES);
+    MatSetValue(A, 1, 0, β * hi[1] * bs[1], ADD_VALUES);
+    MatSetValue(A, 2, 0, β * hi[2] * bs[2], ADD_VALUES);
 
     /* Set the boundary data for the left hand first-order boundary. */
     MatSetValue(A, 0, 0, σ1 * hi[0], ADD_VALUES);
 
     MatSetValue(A, matrix_points - 1, matrix_points - 3, 
-      σ2 * hi[local_domain_size - 3] * bs[2] * h[local_domain_size - 3],
-      ADD_VALUES);
+      σ2 * hi[local_domain_size - 1] * bs[2], ADD_VALUES);
     MatSetValue(A, matrix_points - 1, matrix_points - 2, 
-      σ2 * hi[local_domain_size - 2] * bs[1] * h[local_domain_size - 2],
-      ADD_VALUES);
+      σ2 * hi[local_domain_size - 1] * bs[1], ADD_VALUES);
     MatSetValue(A, matrix_points - 1, matrix_points - 1, 
-      σ2 * hi[local_domain_size - 1] * bs[0] * h[local_domain_size - 1],
-      ADD_VALUES);
+      σ2 * hi[local_domain_size - 1] * bs[0], ADD_VALUES);
 
-    for (std::size_t i = 0; i < local_domain_ranges.size() -1; ++i) {
+
+    for (std::size_t i = 0; i < local_domain_ranges.size() - 1; ++i) {
       auto local = local_domain_ranges[i];
       auto local_offset = (i + 1) * local_domain_size;
+      auto n = local_domain_size;
 
-      /* β*HI1*BS'*e0*e0' */
+
+      /* β * HI1 * BS' * en * en' */ 
+      MatSetValue(A, local_offset - 3, local_offset - 1, 
+        β * hi[n - 3] * bs[2], ADD_VALUES);
+      MatSetValue(A, local_offset - 2, local_offset - 1, 
+        β * hi[n - 2] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset - 1, 
+        β * hi[n - 1] * bs[0], ADD_VALUES);
+
+      /* ϵ * HI1 * BS  * en * en' */
+      MatSetValue(A, local_offset - 1, local_offset - 3, 
+        ϵ * hi[n - 1] * bs[2], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset - 2, 
+        ϵ * hi[n - 1] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset - 1, 
+        ϵ * hi[n - 1] * bs[0], ADD_VALUES);
+
+      /* σ₁ * HI1 * en * en' */ 
+      MatSetValue(A, local_offset - 1, local_offset - 1, 
+        σ1 * hi[n - 1], ADD_VALUES);
+
+      /* β * HI1 * BS' *e0 * e0' */
       MatSetValue(A, local_offset, local_offset, 
-        β * hi[0] * bs[0] * h[0], ADD_VALUES);
+        β * hi[0] * bs[0], ADD_VALUES);
       MatSetValue(A, local_offset + 1, local_offset, 
-        β * hi[0] * bs[1] * h[0], ADD_VALUES);
+        β * hi[1] * bs[1], ADD_VALUES);
       MatSetValue(A, local_offset + 2, local_offset, 
-        β * hi[0] * bs[2] * h[0], ADD_VALUES);
+        β * hi[2] * bs[2], ADD_VALUES);
 
-      /* ϵ*HI1*e0*e0'*BS */
+      /* ϵ * HI1 * BS * e0 * e0 */
       MatSetValue(A, local_offset, local_offset, 
-        ϵ * hi[0] * bs[0] * h[0], ADD_VALUES);
+        ϵ * hi[0] * bs[0], ADD_VALUES);
       MatSetValue(A, local_offset, local_offset + 1, 
-        ϵ * hi[0] * bs[1] * h[1], ADD_VALUES);
+        ϵ * hi[0] * bs[1], ADD_VALUES);
       MatSetValue(A, local_offset, local_offset + 2, 
-        ϵ * hi[0] * bs[2] * h[2], ADD_VALUES);
+        ϵ * hi[0] * bs[2], ADD_VALUES);
+
+      /* σ₁ * HI1 * e0 * e0' */
+      MatSetValue(A, local_offset, local_offset, 
+        σ1 * hi[0], ADD_VALUES);
+
+      /* -σ₁ * HI1 * en * e0' */
+      MatSetValue(A, local_offset - 1, local_offset, 
+        -σ1 * hi[n - 1], ADD_VALUES);
+
+      /* -β * HI1 * BS' * en * e0' */
+      MatSetValue(A, local_offset - 3, local_offset, 
+        -β * hi[n - 3] * bs[2], ADD_VALUES);
+      MatSetValue(A, local_offset - 2, local_offset, 
+        -β * hi[n - 2] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset, 
+        -β * hi[n - 1] * bs[0], ADD_VALUES);
+
+
+      /* -β * HI1 * BS' * e0 * en' */
+      MatSetValue(A, local_offset + 2, local_offset - 1, 
+        -β * hi[2] * bs[2], ADD_VALUES);
+      MatSetValue(A, local_offset + 1, local_offset - 1, 
+        -β * hi[1] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset, local_offset, - 1 
+        -β * hi[0] * bs[0], ADD_VALUES);
+
+
+      /* -σ₁ * HI1 * e0 * en' */
+      MatSetValue(A, local_offset, local_offset - 1, 
+        -σ1 * hi[0], ADD_VALUES);
+
+      /* ϵ * HI1 * en * e0' * BS */
+       MatSetValue(A, local_offset - 1, local_offset, 
+        ϵ * hi[n - 1] * bs[0], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset + 1, 
+        ϵ * hi[n - 1] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset - 1, local_offset + 2, 
+        ϵ * hi[n - 1] * bs[2], ADD_VALUES);
+
+      /* ϵ * HI1 * e0 * en' * BS */
+       MatSetValue(A, local_offset, local_offset - 1, 
+        ϵ * hi[0] * bs[0], ADD_VALUES);
+      MatSetValue(A, local_offset, local_offset - 2, 
+        ϵ * hi[0] * bs[1], ADD_VALUES);
+      MatSetValue(A, local_offset, local_offset - 3, 
+        ϵ * hi[0] * bs[2], ADD_VALUES);
 
       
     }
