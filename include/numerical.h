@@ -26,11 +26,11 @@ struct operators {
     operators(){};
     
     /* Returns finite difference H matrix. */
-    std::vector<ℝ> H(
-        ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
+    static std::vector<ℝ> 
+    H(ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
 
-    std::vector<ℝ> H_inverse(
-        ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
+    static std::vector<ℝ> 
+    H_inverse(ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
 
     struct sbp {
         using row_p = std::tuple<ℤ, std::vector<ℝ> const *>;
@@ -40,21 +40,29 @@ struct operators {
         std::vector<ℝ> d;
         std::vector<ℝ> h, hi;
         std::vector<std::vector<ℝ>> top, bottom;
+        std::vector<ℝ> top_boundary_data, bot_boundary_data;
         Mat _petsc_repr;
         sbp(ℤ const size, ℤ const order, ℝ const left, ℝ const right);
+        
         /*  Given a const reference to an index, return a reference to 
             a vector of tuples of (size_t, long double) representing 
             the index and the value of rows. */
         row_p row(ℤ const index) const;
-
         row_t rowf(ℤ const index) const;
 
+        /* Return a lambda function that computes SpMV of the current
+           state of the operator. Captures a copy of the necessary 
+           operator data. */
         auto product() {
-            return [size=size, d=d, h=h, top=top, bottom=bottom]
+            return [size=size, d=d, h=h,  top=top, bottom=bottom, 
+                tbd=top_boundary_data]
             (std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs){
 
                 for (std::size_t i = 0; i != lhs.size(); ++i)
                     lhs[i] = 0.;
+
+                // for (std::size_t i = 0; i != tbd.size(); ++i)
+                //     lhs[i] += tbd[i] * rhs[0];
 
                 for (std::size_t i = 0; i != lhs.size(); ++i) {
 
@@ -79,7 +87,7 @@ struct operators {
                     }
                     else { throw; }
 
-                    // // Apply the grid spacing "H" matrix. 
+                    // Apply the grid spacing "H" matrix. 
                     // for (std::size_t ii = 0; ii < res.size(); ++ii) {
                     //     res[ii] *= h[j + ii];
                     // } 
@@ -96,6 +104,8 @@ struct operators {
         d1(ℤ const size, ℤ const order=2, ℝ const left=-1., 
            ℝ const right=1.) : sbp(size, order, left, right) {
             load_operator(); 
+            h = std::vector<ℝ>(size);
+            hi = std::vector<ℝ>(size); 
         };
         void load_operator();
     };
@@ -104,20 +114,41 @@ struct operators {
 
         
         std::vector<ℝ> d1_interior;
-        std::vector<ℝ> h, hi;
         std::vector<std::vector<ℝ>> d1_top, d1_bottom;
 
         d2(ℤ const size, ℤ const order=2, ℝ const left=-1., 
            ℝ const right=1.) : sbp(size, order, left, right) {
             load_operator(); 
-            h = std::vector<ℝ>(size, 1.); 
-            hi = std::vector<ℝ>(size, 1.); 
+            h = std::vector<ℝ>(size); 
+            load_h(); 
+            hi = std::vector<ℝ>(size); 
+            load_h_inverse(); 
         };
         void load_operator();
         void fuse(std::vector<ℝ> const &diag);
         void fuse_hi(std::vector<ℝ> const &diag);
+
+        /* load the H spacing matrix used in computing the matrix-free
+           SpMV action */
+        void load_h();
+        void load_h_inverse();
+        void load_left_boundary_data();
+        void load_right_boundary_data();
+
+        /* Modify the top vector with the appropriate boundary data. 
+           degree = 1 for Dirichlet boundary conditions ie. u0 = value, 
+           degree = 2 forNeumann boundary conditions ie. du0 = value. */ 
         void left_boundary(ℝ value, ℤ degree=1);
+
+        /* Modify the bottom vector with the appropriate boundary data. 
+           degree = 1 for Dirichlet boundary conditions ie. uN = value, 
+           degree = 2 forNeumann boundary conditions ie. duN = value. */
         void right_boundary(ℝ value, ℤ degree=1);
+
+        void left_sat(ℝ value);
+
+        void right_sat(ℝ value);
+
     };
 
 

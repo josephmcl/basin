@@ -36,7 +36,10 @@ static const std::vector<std::vector<real_t>> bd_p6 = {
 
 /* second-order, second derivative matrix components. */ 
 static const std::vector<real_t> d2_p2 = {1., -2., 1.};
-static const std::vector<std::vector<real_t>> bd2_p2 = {{1., -2., 1.}};
+static const std::vector<std::vector<real_t>> bd2_p2 = {
+    {1., -2., 1.},
+    {0.,  0., 0.},
+    {0.,  0., 0.}};
 
 /* fourth-order, second derivative matrix components. */ 
 static const std::vector<real_t> d2_p4 = {
@@ -46,6 +49,11 @@ static const std::vector<std::vector<real_t>> bd2_p4 = {
     {     1.,     -2.,        1.,        0.,      0.,      0.},
     {-4./43., 59./43., -110./43.,   59./43., -4./43.,      0.},
     {-1./49.,      0.,   59./49., -118./49., 64./49., -4./49.}};
+
+/* second-order, second derivative matrix SAT component. */ 
+static const std::vector<real_t> d2_bs2 = {3./2., -2., 1./2.};
+/* fourth-order, second derivative matrix SAT component.. */ 
+static const std::vector<real_t> d2_bs4 = {11./6., -3., 3./2., -1./3.,};
     
 std::vector<real_t> numerical::operators::H_inverse(std::size_t nodes, 
     std::size_t order, real_t left, real_t right) {
@@ -119,33 +127,66 @@ numerical::operators::sbp::row(std::size_t const index) const {
 std::tuple<std::size_t, std::vector<real_t> const >
 numerical::operators::sbp::rowf(std::size_t const index) const {
 
-    std::size_t j;
+    std::size_t row_start_index;
     auto res = std::vector<real_t>();
 
-    if (index < top.size()) {
-        j = 0;
+    // TODO: soft code this later
+    if (index  == 0) { 
+        row_start_index = 0;
         res = top[index];
     }  
-    else if (index < size - bottom.size()) {
-        // Adjust column index for kernel size. 
-        j = index - ((d.size() - 1) / 2);
+    else if (index < size - 1) {
+        row_start_index = index - ((d.size() - 1) / 2);
         res = d;
     }
-    else if (index < size) {
-        // Find logical index from explicitly stored kernel.
-        auto i = index - (size - bottom.size());
-        // Adjust column index for kernel size.
-        j = size - bottom[i].size();
-        res = bottom[i];
+    else if (index == size - 1) {
+        row_start_index = size - bottom[2].size();
+        res = bottom[2];
+        
     }
     else { throw; }
 
-    // Apply the grid spacing "H" matrix. 
-    // for (std::size_t i = 0; i < res.size(); ++i) {
-    //     res[i] *= h[j + i];
-    // } 
+    if (index == 1 or index == 2) {
+        auto temp = std::vector<real_t>();
+        temp = top[index];
+        for (std::size_t i = 0; i != res.size(); ++i) {
+            if (row_start_index + i < temp.size()) {
+                temp[row_start_index + i] += res[i];
+            }
+            else {
+                temp.push_back(res[i]);
+            }
+        }
+        res = temp;
+        row_start_index = 0;
+    }
 
-    return std::make_tuple(j, res);
+    if (index == size - 2 or index == size - 3) {
+        // row_start_index = 0;
+        auto f = index - (size - 3);
+        std::cout << f << std::endl;
+        auto temp_start_index = size - bottom[f].size();
+        auto temp = std::vector<real_t>();
+        // temp = bottom[index];
+        auto ofs = bottom[f].size() - res.size();
+        for (std::size_t i = row_start_index; i != size; ++i) {
+            if (i < temp_start_index) {
+                temp.push_back(res[i - temp_start_index]);
+            }
+            else {
+                temp.push_back(res[i - temp_start_index] + bottom[f][i - temp_start_index - ofs]);
+            }
+        }
+        res = temp;
+        row_start_index = size - 3;
+    }
+
+    // Apply the grid spacing "H" matrix. 
+    for (std::size_t i = 0; i < res.size(); ++i) {
+        res[i] *= h[row_start_index + i];
+    } 
+
+    return std::make_tuple(row_start_index, res);
 }
 
 /*
@@ -253,6 +294,52 @@ void numerical::operators::d2::load_operator() {
     load_d1_operator(order, grid_size, d1_interior, d1_top, d1_bottom);
 }
 
+void numerical::operators::d2::load_h() {
+    auto diag = numerical::operators::H(size, order, left, right);
+    for (std::size_t i = 0; i < size; ++i) {
+        h[i] = diag[i];
+    }
+}
+
+void numerical::operators::d2::load_h_inverse() {
+    auto diag = numerical::operators::H_inverse(
+        size, order, left, right);
+    for (std::size_t i = 0; i < size; ++i) {
+        hi[i] = diag[i];
+    }
+}
+
+void numerical::operators::d2::load_left_boundary_data() {
+    
+    std::vector<real_t> bs; 
+    if (order == 2) {
+        bs = d2_bs2;
+    }
+    else if (order == 4) {
+        bs = d2_bs4;
+    }
+
+    for (auto &e: bs) {
+        top_boundary_data.push_back(e / grid_size);
+    }   
+}
+
+void numerical::operators::d2::load_right_boundary_data() {
+    
+    std::vector<real_t> bs; 
+    if (order == 2) {
+        bs = d2_bs2;
+    }
+    else if (order == 4) {
+        bs = d2_bs4;
+    }
+
+    for (auto &e: bs) {
+        bot_boundary_data.push_back(e / grid_size);
+        std::reverse(bot_boundary_data.begin(),bot_boundary_data.end());
+    }   
+}
+
 void numerical::operators::d2::fuse(std::vector<ℝ> const &diag) {
     for (std::size_t i = 0; i < size; ++i) h[i] = diag[i];
 }
@@ -263,9 +350,10 @@ void numerical::operators::d2::fuse_hi(std::vector<ℝ> const &diag) {
 
 void numerical::operators::d2::
 left_boundary(real_t value, std::size_t degree) {
-    
-    if (order == 1) {
-        top[0][0] = value * hi[0];
+    if (degree == 1) {
+        top[0][0] += value * hi[0] * top_boundary_data[0];
+        top[1][0] += value * hi[1] * top_boundary_data[1];
+        top[2][0] += value * hi[2] * top_boundary_data[2];
     }
 }
 
@@ -275,20 +363,33 @@ right_boundary(real_t value, std::size_t degree) {
     auto i = bottom.size() - 1;
     auto j = bottom[i].size() - 1;
 
-    if (order == 1) {
+    if (degree == 1) {
         
         bottom[i][j] = value * hi[size - 1];
     }
-    if (order == 2) {
+    if (degree == 2) {
 
-        auto &d2_bottom_row = bottom[bottom.size() - 1];
-        auto &d1_bottom_row = d1_bottom[d1_bottom.size() - 1];
-        auto offset = d2_bottom_row.size() - d1_bottom_row.size();
-        for (std::size_t i = 0; i < d1_bottom_row.size(); ++i) {
-            d2_bottom_row[i + offset] += hi[size - 1] * d1_bottom_row[i] * value;
+        auto &bottom_row = bottom[bottom.size() - 1];
+        auto offset = bottom_row.size() - 3;
+        for (std::size_t i = 0; i != 3; ++i) {
+            bottom_row[i + offset] += hi[size - 1] * bot_boundary_data[i] * value;
         }
 
     }
+}
+
+void numerical::operators::d2::left_sat(real_t value) {
+    load_left_boundary_data();
+    std::size_t i = 0;
+    for (auto &e : top_boundary_data)
+        e *= value * hi[i++];
+}
+
+void numerical::operators::d2::right_sat(real_t value) {
+    load_right_boundary_data();
+    std::size_t i = size;
+    for (auto &e : bot_boundary_data)
+        e *= value * hi[--i];
 }
 
 
