@@ -30,6 +30,7 @@ namespace poisson1d {
   auto const π = std::numbers::pi_v<real_t>;
   auto static to_real_t = [](nat_t n){return static_cast<real_t>(n);};
   using petsc_matrix = Mat;
+  using petsc_vector = Vec;
 
   void analytical(
     vector_t       &res,
@@ -54,6 +55,13 @@ namespace poisson1d {
     domain_t   const  domain         = domain, 
     boundary_t const  boundary       = boundary);
 
+  void petsc_hybridized_problem(
+    vector_t         &result,
+    nat_t      const  size, 
+    nat_t      const  local_problems = 2,
+    domain_t   const  domain         = domain, 
+    boundary_t const  boundary       = boundary);
+
   /*  Set the second-order SBP D2 operator in A using D2 sized to the 
       local_domain_size and partitioned by the number of 
       local_domain_ranges. */
@@ -62,6 +70,13 @@ namespace poisson1d {
     std::vector<range_t> const &local_domain_ranges,
     long double          const  local_domain_size,
     long double          const  spacing_square);
+
+  void write_d2_h1(
+    petsc_matrix                   &M, 
+    std::vector<long double> const &h1, 
+    std::vector<range_t>     const &local_domain_ranges,
+    long double              const  local_domain_size,
+    long double              const  spacing_square); 
 
   void write_boundaries(
     petsc_matrix               &A, 
@@ -83,4 +98,24 @@ namespace poisson1d {
     long double          const  β,
     long double          const  σ1,
     long double          const  ϵ);
+
+  void write_upper_first_order_boundary(
+    petsc_matrix               &M, 
+    vector_t             const &bs, 
+    long double          const  β,
+    long double          const  τ);
+
+  void write_lower_first_order_boundary(
+    petsc_matrix               &M, 
+    vector_t             const &bs,
+    long double          const  n, 
+    long double          const  β,
+    long double          const  τ);
+
+  void write_lower_second_order_boundary(
+    petsc_matrix               &M, 
+    vector_t             const &bs,
+    long double          const  n, 
+    long double          const  β,
+    long double          const  τ);
 };
