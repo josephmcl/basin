@@ -166,6 +166,7 @@ void poisson1d::petsc_hybridized_problem(
   long double τ = -40.;
   long double σ2 = 1;
   long double ϵ = 1.;
+  long double δ_f = 0.1;
 
   // Unpack tuples 
   auto [left, right] = domain;
@@ -204,7 +205,7 @@ void poisson1d::petsc_hybridized_problem(
   auto hi = numerical::operators::H_inverse(local_domain_size, 2, 0, 
     (right - left) / local_problems);
   vector_t bs = {(3./2.) / spacing, -2. / spacing, (1./2.) / spacing};
-
+ 
   /*  Create petsc objects for the M block diagonal matrix. 
 
           [ m_0           ]
@@ -220,7 +221,7 @@ void poisson1d::petsc_hybridized_problem(
   /* Initialize each block with a skew diagonal operator. */
   for (auto &m : M) {
     write_d2_h1(m, h, local_domain_ranges, local_domain_size, 
-      spacing_square);
+      spacing_square * local_problems);
   }
 
   write_upper_first_order_boundary(M[0], bs, β, τ);
@@ -250,8 +251,7 @@ void poisson1d::petsc_hybridized_problem(
       VecSetValue(gbar[i], it.index, 
         -π * π * std::sin(*it * π) * h[it.index], ADD_VALUES);
     }
-    VecAssemblyBegin(gbar[i]);
-    VecAssemblyEnd(gbar[i]);
+    
   }
 
   VecSetValue(gbar[0], 0, τ * left_data, ADD_VALUES);
@@ -267,14 +267,19 @@ void poisson1d::petsc_hybridized_problem(
     (1 / τ) * bs[1] * right_data, ADD_VALUES);
   VecSetValue(gbar[local_problems - 1], local_domain_size - 3, 
     (1 / τ) * bs[2] * right_data, ADD_VALUES);
-   
+
+  for (std::size_t i = 0; i < gbar.size(); ++i) {
+    VecAssemblyBegin(gbar[i]);
+    VecAssemblyEnd(gbar[i]);
+  }
 
   // F and its transpose are matrices, they can be sliced into one
   // of three types of vectors by the size of the local problem: 
   // left data only, right data only, and empty vectors. Here, F 
   // contains just these simpler vectors. 
 
-  /*       right data          left data              empty
+  /*  F Transpose:
+         right data          left data              empty
       [ 0 ... BS, τ * BS ][ τ * BS, BS ... 0 ][ 0, 0 ... 0, 0, 0 ]
            left data           right data             empty
       [ 0, 0 ... 0, 0, 0 ][ 0 ... BS, τ * BS ][ τ * BS, BS ... 0 ] */
@@ -296,9 +301,11 @@ void poisson1d::petsc_hybridized_problem(
   VecAssemblyBegin(Fr);
   VecAssemblyEnd(Fr);
 
-  auto temps = std::vector<petsc_vector>(local_problems); 
+  auto temps = std::vector<petsc_vector>(local_problems * 2); 
   for (auto &t : temps) {
     VecCreateSeq(PETSC_COMM_SELF, local_domain_size, &t);
+    VecAssemblyBegin(t);
+    VecAssemblyEnd(t);
   }
 
   auto M_solvers = std::vector<KSP>(local_problems);
@@ -311,22 +318,97 @@ void poisson1d::petsc_hybridized_problem(
   for (std::size_t i = 0; i < local_problems; ++i) 
       KSPSolve(M_solvers[i], gbar[i], temps[i]);
 
-  for (auto &t : temps) {
-    VecView(t, PETSC_VIEWER_STDOUT_WORLD);
-  }
-
   auto gdel = std::vector<double>(interfaces);
-  auto temp_scalars = std::vector<double>(local_problems * interfaces);
+  auto temp_scalars = std::vector<double>(local_problems * 2);
   for (std::size_t i = 0; i < local_problems; ++i) {
-    VecTDot(Fl, temps[i], &temp_scalars[i * local_problems]);
-    VecTDot(Fr, temps[i], &temp_scalars[i * local_problems + 1]);
+    VecTDot(Fl, temps[i], &temp_scalars[i * 2]);
+    VecTDot(Fr, temps[i], &temp_scalars[i * 2 + 1]);
   }
 
+  /* Sum temp_scalars (ie incomplete gδ values) into gδ. */
   for (std::size_t i = 0; i < interfaces; ++i) {
     gdel[i] = temp_scalars[(i * 2) + 1] + temp_scalars[(i * 2) + 2];
   }
 
-  std::cout << gdel[0] << " " << gdel[1] << std::endl;
+  // TODO: Review this.
+  for (auto &e : gdel) e = (2 * 0.025 * δ_f) - e;
+
+  for (std::size_t i = 0; i < local_problems; ++i) {
+    KSPSolve(M_solvers[i], Fl, temps[i * 2]);
+    KSPSolve(M_solvers[i], Fr, temps[i * 2 + 1]);
+  }
+
+  petsc_matrix λ_denominator = {};
+
+  MatCreateSeqAIJ(PETSC_COMM_SELF, interfaces, interfaces, 2, nullptr, 
+    &λ_denominator);
+  
+  for (auto &e: temp_scalars) e = 0.;
+
+
+  /*  M \ F => 0 [ 1 Ø ]  ie. { 0, 1, 2, 3, 4, 5 }
+                 [ 2 3 ]
+                 [ Ø 4 ] 5      
+                            =>  [ 1R + 2L + ØØ  ØR + 3L + 4Ø ] [0,0 0,1]
+      Ft    =>   [ R L Ø ]      [ 1Ø + 2R + ØL  ØØ + 3R + 4L ] [1,0 1,1]
+                 [ Ø R L ]
+                                ^^^ This will always be one or two 
+                                non-zero values. */ 
+
+
+  for (std::size_t i = 0; i < interfaces; ++i) {
+      
+    for (std::size_t j = 0; j < interfaces; ++j) {
+
+      if (i == j) {
+        double a, b = 0.;
+        VecTDot(Fr, temps[i * 2 + 1], &a);
+        VecTDot(Fl, temps[i * 2 + 2], &b);
+        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
+        MatSetValue(λ_denominator, i, j, -b, ADD_VALUES);
+      } 
+      else if (i - 1 == j) {
+        double a = 0.;
+        VecTDot(Fr, temps[i * 2], &a);
+        MatSetValue(λ_denominator, i, j, a, ADD_VALUES);
+      }
+      else if (i + 1 == j) {
+        double a = 0.;
+        VecTDot(Fl, temps[i * 2 + 3], &a);
+        MatSetValue(λ_denominator, i, j, a, ADD_VALUES);
+      }
+    }
+    MatSetValue(λ_denominator, i, i, 2 * τ, ADD_VALUES);   
+  }
+
+  MatAssemblyBegin(λ_denominator, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(λ_denominator, MAT_FINAL_ASSEMBLY);
+
+  petsc_vector λ_numerator = {};
+  VecCreateSeq(PETSC_COMM_SELF, interfaces, &λ_numerator);
+  for (std::size_t i = 0; i < interfaces; ++i) {
+    VecSetValue(λ_numerator, i, gdel[i], ADD_VALUES);
+  }
+
+  VecAssemblyBegin(λ_numerator);
+  VecAssemblyEnd(λ_numerator);
+
+  MatView(λ_denominator, PETSC_VIEWER_STDOUT_WORLD);
+
+  petsc_vector λ = {};
+  VecCreateSeq(PETSC_COMM_SELF, interfaces, &λ);
+  VecAssemblyBegin(λ);
+  VecAssemblyEnd(λ);
+
+  KSP λ_solver = {};
+  KSPCreate(PETSC_COMM_WORLD, &λ_solver);
+  KSPSetOperators(λ_solver, λ_denominator, λ_denominator);
+  KSPSetUp(λ_solver);
+  
+  KSPSolve(λ_solver, λ_numerator, λ);
+
+  VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
+  VecView(λ, PETSC_VIEWER_STDOUT_WORLD);
 
   for (auto &e : M)         MatDestroy(&e);
   for (auto &e : gbar)      VecDestroy(&e);
@@ -334,6 +416,10 @@ void poisson1d::petsc_hybridized_problem(
   VecDestroy(&Fl);
   VecDestroy(&Fr);
   for (auto &e : temps)     VecDestroy(&e);
+  VecDestroy(&λ_numerator);
+  MatDestroy(&λ_denominator);
+  KSPDestroy(&λ_solver);
+  VecDestroy(&λ);
 
 }
 
