@@ -370,12 +370,12 @@ void poisson1d::petsc_hybridized_problem(
       else if (i - 1 == j) {
         double a = 0.;
         VecTDot(Fr, temps[i * 2], &a);
-        MatSetValue(λ_denominator, i, j, a, ADD_VALUES);
+        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
       }
       else if (i + 1 == j) {
         double a = 0.;
         VecTDot(Fl, temps[i * 2 + 3], &a);
-        MatSetValue(λ_denominator, i, j, a, ADD_VALUES);
+        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
       }
     }
     MatSetValue(λ_denominator, i, i, 2 * τ, ADD_VALUES);   
@@ -404,11 +404,43 @@ void poisson1d::petsc_hybridized_problem(
   KSPCreate(PETSC_COMM_WORLD, &λ_solver);
   KSPSetOperators(λ_solver, λ_denominator, λ_denominator);
   KSPSetUp(λ_solver);
+
+  VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
   
   KSPSolve(λ_solver, λ_numerator, λ);
 
-  VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
-  VecView(λ, PETSC_VIEWER_STDOUT_WORLD);
+  double const *λ_data;
+  VecGetArrayRead(λ, &λ_data);
+  // rhs = (g_bar - F*lambda)
+
+  std::cout << λ_data[0] << std::endl;
+  std::cout << λ_data[1] << std::endl;
+
+  for (std::size_t i = 0; i < local_problems; ++i) {
+    VecCopy(Fl, temps[i * 2]);
+    VecCopy(Fr, temps[i * 2 + 1]);
+  }
+
+  for (std::size_t i = 0; i < local_problems - 1; ++i) {
+    /* NOTE: AXPY => y = a x + y */
+    VecAXPY(gbar[i],     -λ_data[i], temps[i * 2 + 1]);
+    VecAXPY(gbar[i + 1], -λ_data[i], temps[i * 2 + 2]);
+  }
+
+  auto u = std::vector<petsc_vector>(local_problems);
+  for (auto &e : u) {
+    VecCreateSeq(PETSC_COMM_SELF, local_domain_size, &e);
+    VecAssemblyBegin(e);
+    VecAssemblyEnd(e);
+  }
+
+  for (std::size_t i = 0; i < local_problems; ++i) {
+    KSPSolve(M_solvers[i], gbar[i], u[i]);
+  }
+
+  VecView(u[0], PETSC_VIEWER_STDOUT_WORLD);
+  VecView(u[1], PETSC_VIEWER_STDOUT_WORLD);
+  VecView(u[2], PETSC_VIEWER_STDOUT_WORLD);
 
   for (auto &e : M)         MatDestroy(&e);
   for (auto &e : gbar)      VecDestroy(&e);
@@ -420,6 +452,7 @@ void poisson1d::petsc_hybridized_problem(
   MatDestroy(&λ_denominator);
   KSPDestroy(&λ_solver);
   VecDestroy(&λ);
+  for (auto &e : u)         VecDestroy(&e);
 
 }
 
@@ -469,31 +502,28 @@ void poisson1d::write_d2(
 void poisson1d::write_d2_h1(
   petsc_matrix                   &M, 
   std::vector<long double> const &h, 
-  std::vector<range_t>     const &local_domain_ranges,
-  long double              const  local_domain_size,
+  range_t                  const &domain_range,
+  long double              const  domain_size,
   long double              const  spacing_square) {
   
-  for (std::size_t i = 0; i < local_domain_ranges.size(); ++i) {
-    auto local = local_domain_ranges[i];
-    
-    /* Initialize the first local skew row. */
-    MatSetValue(M, 0, 0,  1. / spacing_square * h[0], ADD_VALUES);
-    MatSetValue(M, 0, 1, -2. / spacing_square * h[0], ADD_VALUES);
-    MatSetValue(M, 0, 2,  1. / spacing_square * h[0], ADD_VALUES); 
+  auto local = domain_range[i];
+  /* Initialize the first local skew row. */
+  MatSetValue(M, 0, 0,  1. / spacing_square * h[0], ADD_VALUES);
+  MatSetValue(M, 0, 1, -2. / spacing_square * h[0], ADD_VALUES);
+  MatSetValue(M, 0, 2,  1. / spacing_square * h[0], ADD_VALUES); 
 
-    /* Initialize the final local skew row. */
-    auto n = local_domain_size - 1;
-    MatSetValue(M, n, n - 2,  1. / spacing_square * h[n], ADD_VALUES);
-    MatSetValue(M, n, n - 1, -2. / spacing_square * h[n], ADD_VALUES);
-    MatSetValue(M, n, n,      1. / spacing_square * h[n], ADD_VALUES); 
+  /* Initialize the final local skew row. */
+  auto n = domain_size - 1;
+  MatSetValue(M, n, n - 2,  1. / spacing_square * h[n], ADD_VALUES);
+  MatSetValue(M, n, n - 1, -2. / spacing_square * h[n], ADD_VALUES);
+  MatSetValue(M, n, n,      1. / spacing_square * h[n], ADD_VALUES); 
 
-    /* Initialize the interior local diagonal rows. */
-    for (auto it = local.begin() + 1; it != local.end() - 1; ++it) {  
-      auto ij = it.index;
-      MatSetValue(M, ij, ij - 1,  1./spacing_square*h[ij], ADD_VALUES);
-      MatSetValue(M, ij, ij,     -2./spacing_square*h[ij], ADD_VALUES);
-      MatSetValue(M, ij, ij + 1,  1./spacing_square*h[ij], ADD_VALUES);  
-    }
+  /* Initialize the interior local diagonal rows. */
+  for (auto it = local.begin() + 1; it != local.end() - 1; ++it) {  
+    auto ij = it.index;
+    MatSetValue(M, ij, ij - 1,  1./spacing_square*h[ij], ADD_VALUES);
+    MatSetValue(M, ij, ij,     -2./spacing_square*h[ij], ADD_VALUES);
+    MatSetValue(M, ij, ij + 1,  1./spacing_square*h[ij], ADD_VALUES);  
   }
 }
 
