@@ -22,7 +22,6 @@
 
 namespace sbp_sat { 
 
-
   using nat_t = std::size_t;
   using real_t = type::real_t;  
   using vector_t = std::vector<real_t>;
@@ -47,59 +46,103 @@ namespace sbp_sat {
 
 namespace x2 {
 
+  using ℤ = std::size_t;
+  using ℝ = type::real_t;  
 
-    using ℤ = std::size_t;
-    using ℝ = type::real_t;  
+  /* */
+  template <typename T>
+  T analytical_solution(T &x, T &y, T const &cx=1., T const &cy=1.) {
+      auto constexpr pi = std::numbers::pi_v<T>;
+      return std::sin(cx * pi * x + cy * pi * y); 
+  }
 
-    /* */
-    template <typename T>
-    T analytical_solution(T &x, T &y, T const &cx=1., T const &cy=1.) {
-        auto constexpr pi = std::numbers::pi_v<T>;
-        return std::sin(cx * pi * x + cy * pi * y); 
-    }
+  template <typename T>
+  T uxx(T &x, T &y, T const &cx=1., T const &cy=1.) {
+      auto constexpr pi = std::numbers::pi_v<T>;
+      return -(cx * cx) * (pi * pi) * std::sin(cx * pi * x + cy * pi * y); 
+  }
 
-    template <typename T>
-    T uxx(T &x, T &y, T const &cx=1., T const &cy=1.) {
-        auto constexpr pi = std::numbers::pi_v<T>;
-        return -(cx * cx) * (pi * pi) * std::sin(cx * pi * x + cy * pi * y); 
-    }
+  template <typename T>
+  T uyy(T &x, T &y, T const &cx=1., T const &cy=1.) {
+      auto constexpr pi = std::numbers::pi_v<T>;
+      return -(cy * cy) * (pi * pi) * std::sin(cx * pi * x + cy * pi * y); 
+  }
 
-    template <typename T>
-    T uyy(T &x, T &y, T const &cx=1., T const &cy=1.) {
-        auto constexpr pi = std::numbers::pi_v<T>;
-        return -(cy * cy) * (pi * pi) * std::sin(cx * pi * x + cy * pi * y); 
-    }
+  template <typename T>
+  T ux(T &x, T &y, T const &cx=1., T const &cy=1.) {
+      auto constexpr pi = std::numbers::pi_v<T>;
+      return cx * pi * std::cos(cx * pi * x + cy * pi * y); 
+  }
 
-    template <typename T>
-    T ux(T &x, T &y, T const &cx=1., T const &cy=1.) {
-        auto constexpr pi = std::numbers::pi_v<T>;
-        return cx * pi * std::cos(cx * pi * x + cy * pi * y); 
-    }
+  template <typename T>
+  T uy(T &x, T &y, T const &cx=1., T const &cy=1.) {
+      auto constexpr pi = std::numbers::pi_v<T>;
+      return cy * pi * std::cos(cx * pi * x + cy * pi * y); 
+  }
 
-    template <typename T>
-    T uy(T &x, T &y, T const &cx=1., T const &cy=1.) {
-        auto constexpr pi = std::numbers::pi_v<T>;
-        return cy * pi * std::cos(cx * pi * x + cy * pi * y); 
-    }
+  void petsc_hybridized_poisson(
+    real_v             &result,
+    domain_v     const &domain, 
+    block_v      const &blocks, 
+    boundary_vx2 const &boundary);
 
-    void petsc_hybridized_poisson(
-      real_v             &result,
-      domain_v     const &domain, 
-      block_v      const &blocks, 
-      boundary_vx2 const &boundary);
+  void write_m( 
+    petsc_matrix       &m,
+    block_t      const &block_x1, 
+    block_t      const &block_x2, 
+    boundary_tx2 const &boundary_x1, 
+    boundary_tx2 const &boundary_x2);
 
-    void write_m( 
-      petsc_matrix       &m,
-      block_t      const &block_x1, 
-      block_t      const &block_x2, 
-      boundary_tx2 const &boundary_x1, 
-      boundary_tx2 const &boundary_x2);
+  void write_d2_h1(
+    petsc_matrix       &M, 
+    real_v       const &h, 
+    range_t      const &local,
+    real_t       const spacing_square, 
+    real_t       const coeff=1.); 
 
-    void write_d2_h1(
-      petsc_matrix                   &M, 
-      std::vector<long double> const &h, 
-      range_t                  const &local,
-      long double              const  spacing_square); 
+  void write_h1(
+    petsc_matrix       &M, 
+    real_v       const &h); 
+
+void write_boundary_x1_left(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bsx1,
+  vector_t     const &hx2, 
+  long double  const  β,
+  long double  const  τ,
+  int          const  order = 1);
+
+void write_boundary_x1_right(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bsx1,
+  vector_t     const &hx2, 
+  real_t       const  β,
+  real_t       const  τ,
+  int          const  order = 1); 
+
+void write_boundary_x2_left(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bsx2,
+  vector_t     const &hx1, 
+  real_t       const  β,
+  real_t       const  τ,
+  int          const  order = 1);
+
+void write_boundary_x2_right(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bsx2,
+  vector_t     const &hx1, 
+  real_t       const  β,
+  real_t       const  τ,
+  int          const  order = 1);
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

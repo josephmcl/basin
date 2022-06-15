@@ -12,7 +12,7 @@ namespace poisson2d {
     using ℤ = std::size_t;
     using ℝ = type::real_t;  
 
-    /* */ 
+    /* */
     template <typename T>
     T analytical_solution(T &x, T &y, T const &cx=1., T const &cy=1.) {
         auto constexpr pi = std::numbers::pi_v<T>;

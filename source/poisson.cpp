@@ -164,9 +164,7 @@ void poisson1d::petsc_hybridized_problem(
 
   long double β = 1.;
   long double τ = -40.;
-  long double σ2 = 1;
-  long double ϵ = 1.;
-  long double δ_f = 0.1;
+  long double δ_f = 0.0;
 
   // Unpack tuples 
   auto [left, right] = domain;
@@ -182,7 +180,6 @@ void poisson1d::petsc_hybridized_problem(
   auto local_domain_size = (size + local_problems - 1) / local_problems;
 
   auto volume_points = (local_domain_size - 1) *local_problems+1;
-  auto matrix_points = local_domain_size * local_problems;
 
   if (volume_points != size) 
     std::cout << "NOTE: The problem was specified with " 
@@ -276,7 +273,7 @@ void poisson1d::petsc_hybridized_problem(
   // F and its transpose are matrices, they can be sliced into one
   // of three types of vectors by the size of the local problem: 
   // left data only, right data only, and empty vectors. Here, F 
-  // contains just these simpler vectors. 
+  // contains just these simpler vectors.   
 
   /*  F Transpose:
          right data          left data              empty
@@ -331,7 +328,7 @@ void poisson1d::petsc_hybridized_problem(
   }
 
   // TODO: Review this.
-  for (auto &e : gdel) e = (2 * 0.025 * δ_f) - e;
+  for (auto &e : gdel) e = (interfaces * h[4] * δ_f) - e;
 
   for (std::size_t i = 0; i < local_problems; ++i) {
     KSPSolve(M_solvers[i], Fl, temps[i * 2]);
@@ -393,7 +390,7 @@ void poisson1d::petsc_hybridized_problem(
   VecAssemblyBegin(λ_numerator);
   VecAssemblyEnd(λ_numerator);
 
-  MatView(λ_denominator, PETSC_VIEWER_STDOUT_WORLD);
+  // MatView(λ_denominator, PETSC_VIEWER_STDOUT_WORLD);
 
   petsc_vector λ = {};
   VecCreateSeq(PETSC_COMM_SELF, interfaces, &λ);
@@ -405,17 +402,14 @@ void poisson1d::petsc_hybridized_problem(
   KSPSetOperators(λ_solver, λ_denominator, λ_denominator);
   KSPSetUp(λ_solver);
 
-  VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
+  // VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
   
   KSPSolve(λ_solver, λ_numerator, λ);
 
   double const *λ_data;
   VecGetArrayRead(λ, &λ_data);
+
   // rhs = (g_bar - F*lambda)
-
-  std::cout << λ_data[0] << std::endl;
-  std::cout << λ_data[1] << std::endl;
-
   for (std::size_t i = 0; i < local_problems; ++i) {
     VecCopy(Fl, temps[i * 2]);
     VecCopy(Fr, temps[i * 2 + 1]);
@@ -438,9 +432,16 @@ void poisson1d::petsc_hybridized_problem(
     KSPSolve(M_solvers[i], gbar[i], u[i]);
   }
 
-  VecView(u[0], PETSC_VIEWER_STDOUT_WORLD);
-  VecView(u[1], PETSC_VIEWER_STDOUT_WORLD);
-  VecView(u[2], PETSC_VIEWER_STDOUT_WORLD);
+  // VecView(u[0], PETSC_VIEWER_STDOUT_WORLD);
+  // VecView(u[1], PETSC_VIEWER_STDOUT_WORLD);
+  // VecView(u[2], PETSC_VIEWER_STDOUT_WORLD);
+
+  for (auto &e : u) {
+    double const *u_data;
+    VecGetArrayRead(e, &u_data);
+    for (std::size_t i = 0; i < local_domain_size; ++i) 
+      result.push_back(u_data[i]);
+  }
 
   for (auto &e : M)         MatDestroy(&e);
   for (auto &e : gbar)      VecDestroy(&e);
@@ -453,7 +454,6 @@ void poisson1d::petsc_hybridized_problem(
   KSPDestroy(&λ_solver);
   VecDestroy(&λ);
   for (auto &e : u)         VecDestroy(&e);
-
 }
 
 void poisson1d::write_d2(
@@ -498,35 +498,36 @@ void poisson1d::write_d2(
   }
 }
 
-
 void poisson1d::write_d2_h1(
   petsc_matrix                   &M, 
   std::vector<long double> const &h, 
-  range_t                  const &domain_range,
-  long double              const  domain_size,
+  std::vector<range_t>     const &local_domain_ranges,
+  long double              const  local_domain_size,
   long double              const  spacing_square) {
   
-  auto local = domain_range[i];
-  /* Initialize the first local skew row. */
-  MatSetValue(M, 0, 0,  1. / spacing_square * h[0], ADD_VALUES);
-  MatSetValue(M, 0, 1, -2. / spacing_square * h[0], ADD_VALUES);
-  MatSetValue(M, 0, 2,  1. / spacing_square * h[0], ADD_VALUES); 
+  for (std::size_t i = 0; i < local_domain_ranges.size(); ++i) {
+    auto local = local_domain_ranges[i];
+    
+    /* Initialize the first local skew row. */
+    MatSetValue(M, 0, 0,  1. / spacing_square * h[0], ADD_VALUES);
+    MatSetValue(M, 0, 1, -2. / spacing_square * h[0], ADD_VALUES);
+    MatSetValue(M, 0, 2,  1. / spacing_square * h[0], ADD_VALUES); 
 
-  /* Initialize the final local skew row. */
-  auto n = domain_size - 1;
-  MatSetValue(M, n, n - 2,  1. / spacing_square * h[n], ADD_VALUES);
-  MatSetValue(M, n, n - 1, -2. / spacing_square * h[n], ADD_VALUES);
-  MatSetValue(M, n, n,      1. / spacing_square * h[n], ADD_VALUES); 
+    /* Initialize the final local skew row. */
+    auto n = local_domain_size - 1;
+    MatSetValue(M, n, n - 2,  1. / spacing_square * h[n], ADD_VALUES);
+    MatSetValue(M, n, n - 1, -2. / spacing_square * h[n], ADD_VALUES);
+    MatSetValue(M, n, n,      1. / spacing_square * h[n], ADD_VALUES); 
 
-  /* Initialize the interior local diagonal rows. */
-  for (auto it = local.begin() + 1; it != local.end() - 1; ++it) {  
-    auto ij = it.index;
-    MatSetValue(M, ij, ij - 1,  1./spacing_square*h[ij], ADD_VALUES);
-    MatSetValue(M, ij, ij,     -2./spacing_square*h[ij], ADD_VALUES);
-    MatSetValue(M, ij, ij + 1,  1./spacing_square*h[ij], ADD_VALUES);  
+    /* Initialize the interior local diagonal rows. */
+    for (auto it = local.begin() + 1; it != local.end() - 1; ++it) {  
+      auto ij = it.index;
+      MatSetValue(M, ij, ij - 1,  1./spacing_square*h[ij], ADD_VALUES);
+      MatSetValue(M, ij, ij,     -2./spacing_square*h[ij], ADD_VALUES);
+      MatSetValue(M, ij, ij + 1,  1./spacing_square*h[ij], ADD_VALUES);  
+    }
   }
 }
-
 
 void poisson1d::write_boundaries(
     petsc_matrix               &A, 

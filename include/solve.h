@@ -85,7 +85,7 @@ namespace solve {
 
                 /* δ = ρ / (p' * q) */
                 δ = ρ / vtv_prod(p, q);
-
+      
                 /* x = x - δ * p */
                 vs_prod(p, δ, temp);
                 inplace_vv_diff(x, temp);
@@ -105,9 +105,8 @@ namespace solve {
                 /* Compute error. */ 
                 error = std::sqrt(vtv_prod(r, r)) 
                       / std::sqrt(vtv_prod(x, x));
-                
+
                 if (error <= ϵ) {
-                    
                     converged = true;
                     break;
                 }

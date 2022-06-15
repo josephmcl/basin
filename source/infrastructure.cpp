@@ -9,11 +9,10 @@ infrastructure::initialize() {
     using namespace infrastructure;
     int c = 0;
     char **v = nullptr;
-    PetscErrorCode ierr;
     PetscBool      success;
 
-    ierr = PetscInitialize(&c, &v, nullptr, nullptr);
-    ierr = PetscInitialized(&success); 
+    PetscInitialize(&c, &v, nullptr, nullptr);
+    PetscInitialized(&success); 
 
 
     return !success ?error::petsc_init_failure :error::nil; 
@@ -22,7 +21,6 @@ infrastructure::initialize() {
 
 void infrastructure::cleanup() {
     using namespace infrastructure;
-    PetscErrorCode ierr;
-    ierr = PetscFinalize();
+    PetscFinalize();
     return;
 }
