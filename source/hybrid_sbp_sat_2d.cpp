@@ -169,7 +169,7 @@ write_m(petsc_matrix       &m,
   MatCreateSeqAIJ(PETSC_COMM_SELF, row_x1.size() * col_x2.size(), row_x1.size() * col_x2.size(), 10, 
     nullptr, &G);
   
-  write_boundary_x1_left( G, row_x1, col_x2, bsx1, hx2, β, τ, 2);
+  write_boundary_x1_left(G, row_x1, col_x2, bsx1, hx2, β, τ, 1);
   // write_boundary_x1_right(G, row_x1, col_x2, bsx1, hx2, β, τ);
   // write_boundary_x2_left( G, row_x1, col_x2, bsx2, hx1, β, τ);
   // write_boundary_x2_right(G, row_x1, col_x2, bsx2, hx1, β, τ);
@@ -185,13 +185,13 @@ write_m(petsc_matrix       &m,
   MatView(Ax2, PETSC_VIEWER_STDOUT_SELF);
   MatView(G, PETSC_VIEWER_STDOUT_SELF);
 
-  petsc_matrix a;
-  MatCreateComposite(PETSC_COMM_SELF, 3, &A[0], &a);
-  MatCompositeSetMatStructure(a, DIFFERENT_NONZERO_PATTERN);
-  MatCompositeMerge(a);
+  //petsc_matrix a;
+  //MatCreateComposite(PETSC_COMM_SELF, 3, &A[0], &a);
+  //MatCompositeSetMatStructure(a, DIFFERENT_NONZERO_PATTERN);
+  //MatCompositeMerge(a);
 
-  MatAssemblyBegin(a, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(a,   MAT_FINAL_ASSEMBLY);
+  //MatAssemblyBegin(a, MAT_FINAL_ASSEMBLY);
+  //MatAssemblyEnd(a,   MAT_FINAL_ASSEMBLY);
 
   PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   MatView(G, PETSC_VIEWER_STDOUT_SELF);
@@ -243,6 +243,8 @@ void sbp_sat::x2::write_h1(
   }
 }
 
+
+
 void sbp_sat::x2::write_boundary_x1_left(
   petsc_matrix       &M, 
   range_t      const &x1,
@@ -253,16 +255,18 @@ void sbp_sat::x2::write_boundary_x1_left(
   real_t       const  τ,
   int          const  order) {
 
+
+  matrix<fw> boundary;
+
   if (order == 1) {
-    for (auto e1 = x1.begin(); e1 != x1.end(); ++e1) {
-      auto i = e1.index;
-      MatSetValue(M, i, i,       τ * hx2[i] - β * hx2[i] * bsx1[0], 
-        ADD_VALUES);
-      MatSetValue(M, i + x1.size(), i,       -β * hx2[i] * bsx1[1], 
-        ADD_VALUES);
-      MatSetValue(M, i + (2 * x1.size()), i, -β * hx2[i] * bsx1[2], 
-        ADD_VALUES);
+
+    for (auto e = x2.begin(); e != x2.end(); ++e) {
+      auto i = e.index; 
+      set_matrix_value<fw>(M, i, i, τ * hx2[i]);
     }
+
+    set_boundary_bs<0, 0>(M, x1.size(), x2.size(), hx2, bsx1, -β);
+
   }
   else { /* second order */
 
@@ -280,15 +284,11 @@ void sbp_sat::x2::write_boundary_x1_left(
       MatSetValue(bs, i, i + x1.size(),       bsx1[1], ADD_VALUES);
       MatSetValue(bs, i, i + (x1.size() * 2), bsx1[2], ADD_VALUES);
 
-      MatSetValue(bs, j, j,                   bsx1[0], ADD_VALUES);
-      MatSetValue(bs, j, j - x1.size(),       bsx1[1], ADD_VALUES);
-      MatSetValue(bs, j, j - (x1.size() * 2), bsx1[2], ADD_VALUES);
-
     }
 
 
-    for (auto e1 = x1.begin(); e1 != x1.end(); ++e1) {
-      auto i = e1.index;
+    for (auto e = x2.begin(); e != x2.end(); ++e) {
+      auto i = e.index;
       MatSetValue(M, i, i,
         hx2[i] - (1 / τ) * hx2[i] * bsx1[0], ADD_VALUES);
       MatSetValue(M, i + x1.size(), i,      
@@ -303,8 +303,16 @@ void sbp_sat::x2::write_boundary_x1_left(
     MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(M,   MAT_FINAL_ASSEMBLY);
 
-    MatAXPY(M, 1, bs, DIFFERENT_NONZERO_PATTERN);
+    petsc_matrix lm;
+    MatMatMult(M, bs, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &lm); 
+    
+    PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+    MatView(lm, PETSC_VIEWER_STDOUT_SELF);
+
+    //MatAXPY(M, 1, bs, DIFFERENT_NONZERO_PATTERN);
+    
     MatDestroy(&bs);
+    MatDestroy(&lm);
 
   }
 }

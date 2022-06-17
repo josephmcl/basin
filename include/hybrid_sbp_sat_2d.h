@@ -12,6 +12,8 @@
 #include "numerical.h"
 #include "solve.h"
 
+#include "linalg.h"
+
 
 /* petsc headers */
 #include "petscsys.h"
@@ -48,6 +50,10 @@ namespace x2 {
 
   using ℤ = std::size_t;
   using ℝ = type::real_t;  
+
+  using namespace linalg;
+
+  auto constexpr fw = framework::petsc;
 
   /* */
   template <typename T>
@@ -143,6 +149,60 @@ void write_boundary_x2_right(
   real_t       const  β,
   real_t       const  τ,
   int          const  order = 1);
+
+template<nat_t major, nat_t begin> 
+void set_boundary_bs(
+  matrix<fw>       &dest,
+  nat_t      const  size1,
+  nat_t      const  size2,
+  vector_t   const &h, 
+  vector_t   const &bs, 
+  real_t     const  c) {
+
+  nat_t row, col; 
+  real_t val;
+  nat_t const size = size1 * size2;
+  if constexpr (major == 0 and begin == 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) {
+      col = i;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = c * h[i] * bs[j];
+        row = i + (j * size1);
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    }
+  }
+  else if constexpr (major == 0 and begin > 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) {
+      col = size - i;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = c * h[i] * bs[j];
+        row = size - i - (j * size1);
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+  else if constexpr (major == 1 and begin == 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) {
+      col = i * size2;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = c * h[i] * bs[j];
+        row = i + j;
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+  else if constexpr (major == 1 and begin > 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) { 
+      col = size - (i * size2);
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = c * h[i] * bs[j];
+        row = size - i - j;
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+}
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */
