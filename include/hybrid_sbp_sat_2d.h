@@ -6,6 +6,8 @@
 #include <tuple>
 #include <iostream>
 #include <array>
+#include <optional>
+#include <functional>
 
 #include "definitions.h"
 #include "ranges.h"
@@ -54,6 +56,11 @@ namespace x2 {
   using namespace linalg;
 
   auto constexpr fw = framework::petsc;
+
+  template <typename T>
+  using optref = std::optional<std::reference_wrapper<T>>;
+
+  auto constexpr transposed = true;
 
   /* */
   template <typename T>
@@ -150,54 +157,174 @@ void write_boundary_x2_right(
   real_t       const  τ,
   int          const  order = 1);
 
-template<nat_t major, nat_t begin> 
-void set_boundary_bs(
+
+/* 
+
+            (1, 0)           
+            ______
+           |      |
+    (0, 0) |      | (0, 1)
+           |______|
+
+            (1, 1)
+
+   _______      _______      _______      _______
+  |\      |    |       |    |`      |    |,      |
+  |  \    |    |       |    |  `    |    |  ,    |
+  |       |    |    \  |    |    `  |    |    ,  |
+  |_______|    |______\|    |______`|    |______,|
+    
+    (0,0)        (0,1)        (1,0)        (1,1)
+
+*/
+
+/* Set a partial Kronecker product i.e., lower or upper, for a single 
+   diagonal matrix. Where the full Kronecker product would result in 
+   entries on a single boundary row or column. */
+template<nat_t major, nat_t minor> 
+void boundary_diagonal(
   matrix<fw>       &dest,
   nat_t      const  size1,
   nat_t      const  size2,
   vector_t   const &h, 
-  vector_t   const &bs, 
-  real_t     const  c) {
+  real_t     const  c = 1.) {
 
   nat_t row, col; 
   real_t val;
   nat_t const size = size1 * size2;
-  if constexpr (major == 0 and begin == 0) {
+  if constexpr (major == 0 and minor == 0) {
     for (std::size_t i = 0; i < h.size(); ++i) {
+      row = i;
+      col = i;
+      val = c * h[i];
+      set_matrix_value<fw>(dest, row, col, val);
+    }
+  }
+  else if constexpr (major == 0 and minor > 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) {
+      row = size - i - 1;
+      col = size - i - 1;
+      val = c * h[i];
+      set_matrix_value<fw>(dest, row, col, val);
+    } 
+  }
+  else if constexpr (major > 0 and minor == 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) {
+      col = i * size2;
+      val = c * h[i];
+      row = i * size2;
+      set_matrix_value<fw>(dest, row, col, val);
+    } 
+  }
+  else if constexpr (major > 0 and minor > 0) {
+    for (std::size_t i = 0; i < h.size(); ++i) { 
+      col = size - (i * size2);
+      val = c * h[i];
+      row = size - (i * size2);
+      set_matrix_value<fw>(dest, row, col, val);
+    } 
+  }
+}
+
+
+template<std::size_t major, std::size_t minor, bool transpose = false> 
+void boundary_bs(
+  matrix<fw>             & dest,
+  nat_t            const   size1,
+  nat_t            const   size2,
+  vector_t         const & bs, 
+  optref<vector_t  const>  h = {},
+  real_t           const   c = 1.) {
+
+  std::function<real_t(nat_t, nat_t)> entry;
+  if (h) {
+    vector_t tmp = *h;
+    entry = [&bs, h = tmp, &c] (nat_t i, nat_t j) -> real_t {
+      return c * h[i] * bs[j];};
+  }
+  else
+    entry = [&bs, &c] (nat_t i, nat_t j) -> real_t {
+        (void) i; return c * bs[j];};
+
+  nat_t row, col; 
+  real_t val;
+  nat_t const size = size1 * size2;
+  if constexpr (major == 0 and minor == 0 and transpose) {
+    for (std::size_t i = 0; i < size2; ++i) {
       col = i;
       for (std::size_t j = 0; j < bs.size(); ++j) {
-        val = c * h[i] * bs[j];
+        val = entry(i, j);
         row = i + (j * size1);
         set_matrix_value<fw>(dest, row, col, val);
       }
     }
   }
-  else if constexpr (major == 0 and begin > 0) {
-    for (std::size_t i = 0; i < h.size(); ++i) {
+  else if constexpr (major == 0 and minor == 0 and not transpose) {
+    for (std::size_t i = 0; i < size2; ++i) {
+      row = i;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = entry(i, j);
+        col = i + (j * size1);
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    }
+  }
+  else if constexpr (major == 0 and minor > 0 and transpose) {
+    for (std::size_t i = 0; i < size2; ++i) {
       col = size - i;
       for (std::size_t j = 0; j < bs.size(); ++j) {
-        val = c * h[i] * bs[j];
+        val = entry(i, j);
         row = size - i - (j * size1);
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major == 1 and begin == 0) {
-    for (std::size_t i = 0; i < h.size(); ++i) {
+  else if constexpr (major == 0 and minor > 0 and not transpose) {
+    for (std::size_t i = 0; i < size2; ++i) {
+      row = size - i;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = entry(i, j);
+        col = size - i - (j * size1);
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+  else if constexpr (major > 0 and minor == 0 and transpose) {
+    for (std::size_t i = 0; i < size1; ++i) {
       col = i * size2;
       for (std::size_t j = 0; j < bs.size(); ++j) {
-        val = c * h[i] * bs[j];
+        val = entry(i, j);
         row = i + j;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major == 1 and begin > 0) {
-    for (std::size_t i = 0; i < h.size(); ++i) { 
+  else if constexpr (major > 0 and minor == 0 and not transpose) {
+    for (std::size_t i = 0; i < size1; ++i) {
+      row = i * size2;
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = entry(i, j);
+        col = i + j;
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+  else if constexpr (major > 0 and minor > 0 and transpose) {
+    for (std::size_t i = 0; i < size1; ++i) { 
       col = size - (i * size2);
       for (std::size_t j = 0; j < bs.size(); ++j) {
-        val = c * h[i] * bs[j];
+        val = entry(i, j);
         row = size - i - j;
+        set_matrix_value<fw>(dest, row, col, val);
+      }
+    } 
+  }
+  else if constexpr (major > 0 and minor > 0 and not transpose) {
+    for (std::size_t i = 0; i < size1; ++i) { 
+      row = size - (i * size2);
+      for (std::size_t j = 0; j < bs.size(); ++j) {
+        val = entry(i, j);
+        col = size - i - j;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
