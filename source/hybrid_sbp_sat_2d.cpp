@@ -96,7 +96,7 @@ write_m(petsc_matrix       &m,
   // hard code the second order bs matrix for now. 
   vector_t bsx1 = {
     (3./2.) / x1_spacing * (x1_sz), 
-        -2. / x1_spacing * (x1_sz),   // Question: maybe flip? 
+        -2. / x1_spacing * (x1_sz),   // NOTE: maybe flip sz's? 
     (1./2.) / x1_spacing * (x1_sz)};
 
   vector_t bsx2 = {
@@ -104,29 +104,11 @@ write_m(petsc_matrix       &m,
         -2. / x2_spacing * (x2_sz), 
     (1./2.) / x2_spacing * (x2_sz)};
 
-  std::cout << bsx1[0] << " " << bsx1[1] << " " << bsx1[2] << " " << std::endl;
-  std::cout << bsx2[0] << " " << bsx2[1] << " " << bsx2[2] << " " << std::endl;
-
-  std::cout << x1_spacing << " " << x2_spacing << std::endl;
-  std::cout << x1_spacing_square << " " << x2_spacing_square << std::endl;
-
-  petsc_matrix d2x1;
-  petsc_matrix d2x2;
-
-  petsc_matrix h1x1;
-  petsc_matrix h1x2;
-
-  std::array<petsc_matrix, 3> A = { };
-  petsc_matrix &Ax1 = A[0];
-  petsc_matrix &Ax2 = A[1];
-  petsc_matrix &G = A[2];
-  // std::array<petsc_matrix const *, 3> A = {&Ax1, &Ax2, &G};
-
+  matrix<fw> d2x1, d2x2, h1x1, h1x2, Ax1, Ax2;
   MatCreateSeqAIJ(PETSC_COMM_SELF, row_x1.size(), row_x1.size(), 4, 
     nullptr, &d2x1);
   MatCreateSeqAIJ(PETSC_COMM_SELF, col_x2.size(), col_x2.size(), 4, 
     nullptr, &d2x2);
-
   MatCreateSeqAIJ(PETSC_COMM_SELF, row_x1.size(), row_x1.size(), 1, 
     nullptr, &h1x1);
   MatCreateSeqAIJ(PETSC_COMM_SELF, col_x2.size(), col_x2.size(), 1, 
@@ -138,72 +120,43 @@ write_m(petsc_matrix       &m,
 
   write_d2_h1(d2x1, hx1, row_x1, x1_spacing_square / (x1_sz * x1_sz), -1.);
   write_d2_h1(d2x2, hx2, col_x2, x2_spacing_square / (x2_sz * x2_sz), -1.);
-
   write_h1(h1x1, hx1);
   write_h1(h1x2, hx2);
-
-  MatAssemblyBegin(d2x1, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(d2x1,   MAT_FINAL_ASSEMBLY);
-  MatAssemblyBegin(d2x2, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(d2x2,   MAT_FINAL_ASSEMBLY);
-  MatAssemblyBegin(h1x1, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(h1x1,   MAT_FINAL_ASSEMBLY);
-  MatAssemblyBegin(h1x2, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(h1x2,   MAT_FINAL_ASSEMBLY);
-
-  // MatView(d2x1, PETSC_VIEWER_STDOUT_WORLD);
-  // MatView(d2x2, PETSC_VIEWER_STDOUT_WORLD);
+  finalize<fw>(d2x1);
+  finalize<fw>(d2x2);
+  finalize<fw>(h1x1);
+  finalize<fw>(h1x2);
 
   MatSeqAIJKron(h1x2, d2x1, MAT_INITIAL_MATRIX, &Ax1);
   MatSeqAIJKron(d2x2, h1x1, MAT_INITIAL_MATRIX, &Ax2);
 
-
-  MatAssemblyBegin(Ax1, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(Ax1,   MAT_FINAL_ASSEMBLY);
-  MatAssemblyBegin(Ax2, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(Ax2,   MAT_FINAL_ASSEMBLY);
-
-  // MatAXPY(Ax1, 1, Ax2, UNKNOWN_NONZERO_PATTERN);
-
-
-  MatCreateSeqAIJ(PETSC_COMM_SELF, row_x1.size() * col_x2.size(), row_x1.size() * col_x2.size(), 10, 
-    nullptr, &G);
+  // finalize<fw>(Ax1);
+  finalize<fw>(Ax2);
+  finalize<fw>(Ax1);
   
   auto sz = row_x1.size() * col_x2.size();
-  MatCreate(PETSC_COMM_SELF, &G);
-  MatSetSizes(G, PETSC_DECIDE, PETSC_DECIDE, sz, sz);
-  MatSetType(G, MATCOMPOSITE);
+  MatCreate(PETSC_COMM_SELF, &m);
+  MatSetSizes(m, PETSC_DECIDE, PETSC_DECIDE, sz, sz);
+  MatSetType(m, MATCOMPOSITE);
 
-  write_boundary_x1_left(G, row_x1, col_x2, bsx1, hx2, β, τ, 2);
-  // write_boundary_x1_right(G, row_x1, col_x2, bsx1, hx2, β, τ);
-  // write_boundary_x2_left( G, row_x1, col_x2, bsx2, hx1, β, τ);
-  // write_boundary_x2_right(G, row_x1, col_x2, bsx2, hx1, β, τ);
+  MatCompositeAddMat(m, Ax1);
+  MatCompositeAddMat(m, Ax2);
+
+  // dirichlet neumann
+  add_boundary<x, left,  neumann>(m, row_x1, col_x2, bsx1, hx2, β, τ);
+  add_boundary<x, right, neumann>(m, row_x1, col_x2, bsx1, hx2, β, τ);
+  add_boundary<y, left,  neumann>(m, row_x1, col_x2, bsx1, hx2, β, τ);
+  add_boundary<y, right, neumann>(m, row_x1, col_x2, bsx1, hx2, β, τ);
   
-
-  MatAssemblyBegin(G, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(G,   MAT_FINAL_ASSEMBLY);
-  MatCompositeSetMatStructure(G, DIFFERENT_NONZERO_PATTERN);
-  MatCompositeMerge(G);
-  MatAssemblyBegin(G, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(G, MAT_FINAL_ASSEMBLY);
-
-  // MatAXPY(Ax1, 1, G, UNKNOWN_NONZERO_PATTERN);
-
-  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_INFO);
-  MatView(Ax1, PETSC_VIEWER_STDOUT_SELF);
-  MatView(Ax2, PETSC_VIEWER_STDOUT_SELF);
-  MatView(G, PETSC_VIEWER_STDOUT_SELF);
-
-  //petsc_matrix a;
-  //MatCreateComposite(PETSC_COMM_SELF, 3, &A[0], &a);
-  //MatCompositeSetMatStructure(a, DIFFERENT_NONZERO_PATTERN);
-  //MatCompositeMerge(a);
-
-  //MatAssemblyBegin(a, MAT_FINAL_ASSEMBLY);
-  //MatAssemblyEnd(a,   MAT_FINAL_ASSEMBLY);
+  MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(m,   MAT_FINAL_ASSEMBLY);
+  MatCompositeSetMatStructure(m, DIFFERENT_NONZERO_PATTERN);
+  MatCompositeMerge(m);
+  MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);
 
   PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-  MatView(G, PETSC_VIEWER_STDOUT_SELF);
+  MatView(m, PETSC_VIEWER_STDOUT_SELF);
 
   MatDestroy(&d2x1);
   MatDestroy(&d2x2);
@@ -273,6 +226,7 @@ void sbp_sat::x2::write_boundary_x1_left(
     boundary_bs<0, 0, transposed>(result, x1.size(), x2.size(), bsx1, hx2, -β);
   }
   else { /* second order */
+   
     matrix<fw> a;
     matrix<fw> b;
     make_local_sparse_matrix<fw>(a, size, size, 3);
@@ -292,6 +246,7 @@ void sbp_sat::x2::write_boundary_x1_left(
   finalize<fw>(result);
   MatCompositeAddMat(M, result);
 }
+
 
 void sbp_sat::x2::write_boundary_x1_right(
   petsc_matrix       &M, 

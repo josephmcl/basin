@@ -62,6 +62,13 @@ namespace x2 {
 
   auto constexpr transposed = true;
 
+  std::size_t constexpr neumann   = 1;
+  std::size_t constexpr dirichlet = 2;
+  std::size_t constexpr x         = 0;
+  std::size_t constexpr y         = 1;
+  std::size_t constexpr left      = 0;
+  std::size_t constexpr right     = 1;
+
   /* */
   template <typename T>
   T analytical_solution(T &x, T &y, T const &cx=1., T const &cy=1.) {
@@ -192,7 +199,7 @@ void boundary_diagonal(
   nat_t row, col; 
   real_t val;
   nat_t const size = size1 * size2;
-  if constexpr (major == 0 and minor == 0) {
+  if constexpr (major == x and minor == left) {
     for (std::size_t i = 0; i < h.size(); ++i) {
       row = i;
       col = i;
@@ -200,27 +207,27 @@ void boundary_diagonal(
       set_matrix_value<fw>(dest, row, col, val);
     }
   }
-  else if constexpr (major == 0 and minor > 0) {
+  else if constexpr (major == x and minor == right) {
     for (std::size_t i = 0; i < h.size(); ++i) {
       row = size - i - 1;
       col = size - i - 1;
-      val = c * h[i];
+      val = c * h[h.size() - i - 1];
       set_matrix_value<fw>(dest, row, col, val);
     } 
   }
-  else if constexpr (major > 0 and minor == 0) {
+  else if constexpr (major == y and minor == left) {
     for (std::size_t i = 0; i < h.size(); ++i) {
+      row = i * size2;
       col = i * size2;
       val = c * h[i];
-      row = i * size2;
       set_matrix_value<fw>(dest, row, col, val);
     } 
   }
-  else if constexpr (major > 0 and minor > 0) {
+  else if constexpr (major == y and minor == right) {
     for (std::size_t i = 0; i < h.size(); ++i) { 
-      col = size - (i * size2);
-      val = c * h[i];
-      row = size - (i * size2);
+      col = size - (i * size2) - 1;
+      val = c * h[h.size() - i - 1];
+      row = size - (i * size2) - 1;
       set_matrix_value<fw>(dest, row, col, val);
     } 
   }
@@ -246,11 +253,12 @@ void boundary_bs(
     entry = [&bs, &c] (nat_t i, nat_t j) -> real_t {
         (void) i; return c * bs[j];};
 
+  vector_t const & spacing = *h;
   nat_t row, col; 
   real_t val;
   nat_t const size = size1 * size2;
-  if constexpr (major == 0 and minor == 0 and transpose) {
-    for (std::size_t i = 0; i < size2; ++i) {
+  if constexpr (major == x and minor == left and transpose) {
+    for (std::size_t i = 0; i < spacing.size(); ++i) {
       col = i;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
@@ -259,7 +267,7 @@ void boundary_bs(
       }
     }
   }
-  else if constexpr (major == 0 and minor == 0 and not transpose) {
+  else if constexpr (major == x and minor == left and not transpose) {
     for (std::size_t i = 0; i < size2; ++i) {
       row = i;
       for (std::size_t j = 0; j < bs.size(); ++j) {
@@ -269,66 +277,105 @@ void boundary_bs(
       }
     }
   }
-  else if constexpr (major == 0 and minor > 0 and transpose) {
+  else if constexpr (major == x and minor == right and transpose) {
     for (std::size_t i = 0; i < size2; ++i) {
-      col = size - i;
+      col = size - i - 1;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        row = size - i - (j * size1);
+        row = size - i - (j * size1) - 1;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major == 0 and minor > 0 and not transpose) {
+  else if constexpr (major == x and minor == right and not transpose) {
     for (std::size_t i = 0; i < size2; ++i) {
-      row = size - i;
+      row = size - i - 1;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        col = size - i - (j * size1);
+        col = size - i - (j * size1) - 1;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major > 0 and minor == 0 and transpose) {
+  else if constexpr (major == y and minor == left and transpose) {
     for (std::size_t i = 0; i < size1; ++i) {
       col = i * size2;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        row = i + j;
+        row = (i * size2) + j;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major > 0 and minor == 0 and not transpose) {
+  else if constexpr (major == y and minor == left and not transpose) {
     for (std::size_t i = 0; i < size1; ++i) {
       row = i * size2;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        col = i + j;
+        col = (i * size2) + j;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
-  else if constexpr (major > 0 and minor > 0 and transpose) {
+  else if constexpr (major == y and minor == right and transpose) {
     for (std::size_t i = 0; i < size1; ++i) { 
-      col = size - (i * size2);
+      col = size - (i * size2) - 1;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        row = size - i - j;
+        row = size - (i * size2) - j - 1;
         set_matrix_value<fw>(dest, row, col, val);
-      }
+      }  
     } 
   }
-  else if constexpr (major > 0 and minor > 0 and not transpose) {
+  else if constexpr (major == y and minor == right and not transpose) {
     for (std::size_t i = 0; i < size1; ++i) { 
-      row = size - (i * size2);
+      row = size - (i * size2) - 1;
       for (std::size_t j = 0; j < bs.size(); ++j) {
         val = entry(i, j);
-        col = size - i - j;
+        col = size - (i * size2) - j - 1;
         set_matrix_value<fw>(dest, row, col, val);
       }
     } 
   }
+}
+
+template<std::size_t dim, std::size_t side, std::size_t order>
+void add_boundary(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bs,
+  vector_t     const &h, 
+  real_t       const  β,
+  real_t       const  τ) {
+
+  matrix<fw> result;
+  nat_t size = x1.size() * x2.size();
+
+  if constexpr (order == neumann) {
+    make_local_sparse_matrix<fw>(result, size, size, 3);
+    boundary_diagonal<dim, side>(result, x1.size(), x2.size(), h, τ);
+    boundary_bs<dim, side, transposed>(result, x1.size(), x2.size(), bs, h, -β);
+  }
+  else if constexpr (order == dirichlet) {
+    matrix<fw> a;
+    matrix<fw> b;
+    make_local_sparse_matrix<fw>(a, size, size, 3);
+    make_local_sparse_matrix<fw>(b, size, size, 3);
+    boundary_diagonal<dim, side>(a, x1.size(), x2.size(), h);
+    boundary_bs<dim, side, transposed>(a, x1.size(), x2.size(), bs, h, -1. / τ);
+    boundary_bs<dim, side>(b, x1.size(), x2.size(), bs);
+    finalize<fw>(a);
+    finalize<fw>(b);
+    matmul<fw>(a, b, result);
+    PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+    MatView(a, PETSC_VIEWER_STDOUT_SELF);
+    MatView(b, PETSC_VIEWER_STDOUT_SELF);
+    destroy<fw>(a);
+    destroy<fw>(b);
+  }
+  finalize<fw>(result);
+  MatCompositeAddMat(M, result);
 }
 
 }; /* namespace sbp_sat::x2 */
