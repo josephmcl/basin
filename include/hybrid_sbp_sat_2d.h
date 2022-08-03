@@ -110,8 +110,7 @@ namespace x2 {
     petsc_matrix       &m,
     block_t      const &block_x1, 
     block_t      const &block_x2, 
-    boundary_tx2 const &boundary_x1, 
-    boundary_tx2 const &boundary_x2);
+    std::array<std::size_t, 4> const bc);
 
   void write_d2_h1(
     petsc_matrix       &M, 
@@ -176,10 +175,10 @@ void write_boundary_x2_right(
             (1, 1)
 
    _______      _______      _______      _______
-  |\      |    |       |    |`      |    |,      |
-  |  \    |    |       |    |  `    |    |  ,    |
-  |       |    |    \  |    |    `  |    |    ,  |
-  |_______|    |______\|    |______`|    |______,|
+  |\      |    |       |    |'      |    |,      |
+  |  \    |    |       |    |  '    |    |  ,    |
+  |       |    |    \  |    |    '  |    |    ,  |
+  |_______|    |______\|    |______'|    |______,|
     
     (0,0)        (0,1)        (1,0)        (1,1)
 
@@ -197,7 +196,7 @@ void boundary_diagonal(
   real_t     const  c = 1.) {
 
   nat_t row, col; 
-  real_t val;
+  real_t val; 
   nat_t const size = size1 * size2;
   if constexpr (major == x and minor == left) {
     for (std::size_t i = 0; i < h.size(); ++i) {
@@ -368,9 +367,60 @@ void add_boundary(
     finalize<fw>(a);
     finalize<fw>(b);
     matmul<fw>(a, b, result);
-    PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-    MatView(a, PETSC_VIEWER_STDOUT_SELF);
-    MatView(b, PETSC_VIEWER_STDOUT_SELF);
+    destroy<fw>(a);
+    destroy<fw>(b);
+  }
+  finalize<fw>(result);
+  MatCompositeAddMat(M, result);
+}
+
+/*  Add boundary coefficients to a matrix operator for 2D volume points 
+    given the dimension and side of the dimension that the boundary is 
+    on for such a matrix. 
+
+    Here, the matrix operator dimensions are organized by major and 
+    minor axes, i.e., for major axis x, minor axis y, |x| = X, |y| = Y, 
+    volume point (i, j) is denoted by row (i * X * Y) + (j * Y). 
+
+    order selects either Neumann or Dirichlet boundaries
+  
+    Dirichlet:
+    τ * H_x - β * H_x * BS_y' 
+        
+    Neumann:
+    H_x * BS_y - (1 / τ) * H_x * BS_y * BS_y 
+
+ */
+template<std::size_t dim, std::size_t side>
+void add_boundary(
+  petsc_matrix       &M, 
+  range_t      const &x1,
+  range_t      const &x2,
+  vector_t     const &bs,
+  vector_t     const &h, 
+  real_t       const  β,
+  real_t       const  τ,
+  std::size_t  const  order) {
+
+  matrix<fw> result;
+  nat_t size = x1.size() * x2.size();
+
+  if (order == dirichlet) {
+    make_local_sparse_matrix<fw>(result, size, size, 3);
+    boundary_diagonal<dim, side>(result, x1.size(), x2.size(), h, τ);
+    boundary_bs<dim, side, transposed>(result, x1.size(), x2.size(), bs, h, -β);
+  }
+  else if (order == neumann) {
+    matrix<fw> a;
+    matrix<fw> b;
+    make_local_sparse_matrix<fw>(a, size, size, 3);
+    make_local_sparse_matrix<fw>(b, size, size, 3);
+    boundary_diagonal<dim, side>(a, x1.size(), x2.size(), h);
+    boundary_bs<dim, side, transposed>(a, x1.size(), x2.size(), bs, h, -1. / τ);
+    boundary_bs<dim, side>(b, x1.size(), x2.size(), bs);
+    finalize<fw>(a);
+    finalize<fw>(b);
+    matmul<fw>(a, b, result);
     destroy<fw>(a);
     destroy<fw>(b);
   }
