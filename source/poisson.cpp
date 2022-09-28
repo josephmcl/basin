@@ -221,6 +221,10 @@ void poisson1d::petsc_hybridized_problem(
       spacing_square * local_problems);
   }
 
+  /* Write boundary data on each block, first and final blocks potentially
+     have unique left and right-hand boundaries accordingly. In this case 
+     the final block has a second-order right-hand boundary. */
+
   write_upper_first_order_boundary(M[0], bs, β, τ);
   write_lower_second_order_boundary(M[local_problems - 1], bs, 
     local_domain_size, β, τ);
@@ -231,6 +235,7 @@ void poisson1d::petsc_hybridized_problem(
     
   }
   
+  /* Finalize each block (petsc book-keeping). */
   for (auto &m : M) {
     MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(m, MAT_FINAL_ASSEMBLY);

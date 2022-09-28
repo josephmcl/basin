@@ -100,6 +100,12 @@ namespace x2 {
       return cy * pi * std::cos(cx * pi * x + cy * pi * y); 
   }
 
+  void petsc_poisson(
+    sbp_sat::real_v             &result,
+    sbp_sat::domain_v     const &domain, 
+    sbp_sat::block_t      const &block, 
+    sbp_sat::boundary_tx2 const &boundaries); 
+
   void petsc_hybridized_poisson(
     real_v             &result,
     domain_v     const &domain, 
@@ -123,46 +129,49 @@ namespace x2 {
     petsc_matrix       &M, 
     real_v       const &h); 
 
-void write_boundary_x1_left(
-  petsc_matrix       &M, 
-  range_t      const &x1,
-  range_t      const &x2,
-  vector_t     const &bsx1,
-  vector_t     const &hx2, 
-  long double  const  β,
-  long double  const  τ,
-  int          const  order = 1);
+  void write_boundary_x1_left(
+    petsc_matrix       &M, 
+    range_t      const &x1,
+    range_t      const &x2,
+    vector_t     const &bsx1,
+    vector_t     const &hx2, 
+    long double  const  β,
+    long double  const  τ,
+    int          const  order = 1);
 
-void write_boundary_x1_right(
-  petsc_matrix       &M, 
-  range_t      const &x1,
-  range_t      const &x2,
-  vector_t     const &bsx1,
-  vector_t     const &hx2, 
-  real_t       const  β,
-  real_t       const  τ,
-  int          const  order = 1); 
+  void write_boundary_x1_right(
+    petsc_matrix       &M, 
+    range_t      const &x1,
+    range_t      const &x2,
+    vector_t     const &bsx1,
+    vector_t     const &hx2, 
+    real_t       const  β,
+    real_t       const  τ,
+    int          const  order = 1); 
 
-void write_boundary_x2_left(
-  petsc_matrix       &M, 
-  range_t      const &x1,
-  range_t      const &x2,
-  vector_t     const &bsx2,
-  vector_t     const &hx1, 
-  real_t       const  β,
-  real_t       const  τ,
-  int          const  order = 1);
+  void write_boundary_x2_left(
+    petsc_matrix       &M, 
+    range_t      const &x1,
+    range_t      const &x2,
+    vector_t     const &bsx2,
+    vector_t     const &hx1, 
+    real_t       const  β,
+    real_t       const  τ,
+    int          const  order = 1);
 
-void write_boundary_x2_right(
-  petsc_matrix       &M, 
-  range_t      const &x1,
-  range_t      const &x2,
-  vector_t     const &bsx2,
-  vector_t     const &hx1, 
-  real_t       const  β,
-  real_t       const  τ,
-  int          const  order = 1);
+  void write_boundary_x2_right(
+    petsc_matrix       &M, 
+    range_t      const &x1,
+    range_t      const &x2,
+    vector_t     const &bsx2,
+    vector_t     const &hx1, 
+    real_t       const  β,
+    real_t       const  τ,
+    int          const  order = 1);
 
+  void write_Ls(
+    std::vector<petsc_matrix> &L,
+    boundary_vx2 const &boundaries);
 
 /* 
 

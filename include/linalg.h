@@ -29,6 +29,7 @@ namespace linalg {
 
   /* PETSc type aliases. */
   using petsc_matrix = Mat;
+  using petsc_vector = Vec;
 
   /* Evaluate the back-end linalg matrix type at compile time. Idea 
      robbed from stackoverflow.com/a/61177390 */
@@ -40,8 +41,8 @@ namespace linalg {
   }
 
   /* The compile time matrix type template. */
-  template<framework f>
-  using matrix = typename decltype(pick_matrix_type<f>())::type;
+  template<framework f> using matrix = typename 
+  decltype(pick_matrix_type<f>())::type;
 
   /* Initialize a local sparse matrix. */
   template<framework f>
@@ -78,4 +79,23 @@ namespace linalg {
     if constexpr (f == framework::petsc)
       MatMatMult(a, b, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &c); 
   }
+
+  /* Evaluate the back-end linalg matrix type at compile time. Idea 
+     robbed from stackoverflow.com/a/61177390 */
+  template<framework f>
+  constexpr auto pick_vector_type() {
+    if constexpr (f == framework::petsc) {
+        return std::type_identity<petsc_vector>{};
+    } 
+  }
+
+  /* The compile time vector type template. */
+  template<framework f> using vector = typename 
+  decltype(pick_vector_type<f>())::type;
+
+  /* Destroy a vector. */
+  template<framework f> inline void destroy(vector<f> &v) {
+    if constexpr (f == framework::petsc) VecDestroy(&v);
+  }
+
 };

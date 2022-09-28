@@ -6,7 +6,7 @@ include .env
 
 target = main
 
-cc = g++-11
+cc = g++-12
 
 source_ext = cpp
 header_directory = include
@@ -61,8 +61,7 @@ test_includes := $(includes) -I./$(test_directory)
 cernroot_library := -L${CERN_ROOT_LIBRARY}
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
- libraries := -L/usr/local/opt/petsc/lib -lpetsc -lpthread \
- 			  -L/usr/local/opt/open-mpi/lib -lmpi #$(cernroot_library)
+ libraries := -L/opt/homebrew/lib -lpetsc -lpthread -lmpi #$(cernroot_library)
 
 define speaker
 	@echo [make:$$PPID] $(1)
