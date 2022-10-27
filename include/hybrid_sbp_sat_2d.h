@@ -16,6 +16,8 @@
 
 #include "linalg.h"
 
+#include "components.h"
+
 
 /* petsc headers */
 #include "petscsys.h"
@@ -27,8 +29,8 @@
 namespace sbp_sat { 
 
   using nat_t = std::size_t;
-  using real_t = type::real_t;  
-  using vector_t = std::vector<real_t>;
+  // using real_t = type::real_t;  
+  // using vector_t = std::vector<real_t>;
   using real_v = std::vector<real_t>;
   using range_t = numerics::linrange<real_t>;
 
@@ -42,9 +44,12 @@ namespace sbp_sat {
   using boundary_tx2 = std::array<std::tuple<range_t, nat_t>, 4>;
   using boundary_vx2 = std::vector<boundary_tx2>;
 
+  /*
   auto const π = std::numbers::pi_v<real_t>;
   auto static to_real_t = [](nat_t n){return static_cast<real_t>(n);};
   using petsc_matrix = Mat;
+  */
+
   using petsc_vector = Vec;
 
 
@@ -53,9 +58,9 @@ namespace x2 {
   using ℤ = std::size_t;
   using ℝ = type::real_t;  
 
-  using namespace linalg;
+  // using namespace linalg;
 
-  auto constexpr fw = framework::petsc;
+  // auto constexpr fw = framework::petsc;
 
   template <typename T>
   using optref = std::optional<std::reference_wrapper<T>>;
@@ -172,6 +177,10 @@ namespace x2 {
   void write_Ls(
     std::vector<petsc_matrix> &L,
     boundary_vx2 const &boundaries);
+
+  void write_Lts(
+    std::vector<sbp_sat::petsc_matrix> &L,
+    std::vector<sbp_sat::petsc_matrix> &Lt); 
 
 /* 
 
@@ -436,6 +445,25 @@ void add_boundary(
   finalize<fw>(result);
   MatCompositeAddMat(M, result);
 }
+
+void solve(KSP &A, std::vector<petsc_vector> &b, std::vector<petsc_vector> &x);
+void make_f_subs(
+  components const &sbp, 
+  std::vector<std::vector<petsc_vector>> &f);
+
+void fcompop(
+  petsc_matrix &f, 
+  petsc_matrix const &l, 
+  petsc_matrix const &b,
+  petsc_matrix const &h,
+  real_t       const τ, 
+  real_t       const β);
+
+void msolvef(
+  std::vector<std::vector<petsc_vector>> &msf,
+  KSP *m,
+  std::size_t size,
+  std::vector<std::vector<petsc_vector>> &f);
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

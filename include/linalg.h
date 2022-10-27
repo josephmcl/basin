@@ -55,8 +55,9 @@ namespace linalg {
   template<framework f>
   inline void finalize(matrix<f> &m) {
     if constexpr (f == framework::petsc) {
-      MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
-      MatAssemblyEnd(m,   MAT_FINAL_ASSEMBLY);
+      PetscErrorCode e;
+      e = MatAssemblyBegin(m, MAT_FINAL_ASSEMBLY);
+      e = MatAssemblyEnd(m,   MAT_FINAL_ASSEMBLY);
     }
   }
 
@@ -92,6 +93,14 @@ namespace linalg {
   /* The compile time vector type template. */
   template<framework f> using vector = typename 
   decltype(pick_vector_type<f>())::type;
+
+  /* Finalize a vector. */
+  template<framework f> inline void finalize(vector<f> &v) {
+    if constexpr (f == framework::petsc) {
+      VecAssemblyBegin(v);
+      VecAssemblyEnd(v);
+    }
+  }
 
   /* Destroy a vector. */
   template<framework f> inline void destroy(vector<f> &v) {

@@ -107,6 +107,9 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   nat_t local_problems = blocks.size() * blocks.size();
 
+  // only for square hybrid systems 
+  const std::size_t n_blocks = blocks.size() * blocks.size();
+
   /*  Create petsc objects for the block diagonal matrix, M. 
 
           [ m_0           ] 
@@ -121,33 +124,108 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
       |-----|-----|------|
       | ... | ... | bn-1 |  */
 
+  std::vector<std::vector<std::size_t>> interfaces = {
+    {0, 1, 0, 7, 0, 0, 0, 0, 0}, 
+    {0, 0, 2, 0, 8, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 9, 0, 0, 0}, 
+    {0, 0, 0, 0, 3, 0, 10, 0, 0}, 
+    {0, 0, 0, 0, 0, 4, 0, 11, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 12}, 
+    {0, 0, 0, 0, 0, 0, 0, 5, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 6}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0}};
 
-  auto M = std::vector<petsc_matrix>(local_problems); 
+  std::size_t n_interfaces = 0;
+  for (auto &row : interfaces) {
+    for (auto &element : row) {
+      if (element != 0) {
+        n_interfaces += 1;
+      }
+    }
+  }
 
-  auto F  = std::vector<petsc_matrix>(blocks.size()); 
-  auto Ft = std::vector<petsc_matrix>(blocks.size()); 
+  constexpr std::size_t w = 1; constexpr std::size_t e = 2; 
+  constexpr std::size_t s = 3; constexpr std::size_t n = 4; 
 
-  std::size_t w, e, n, s;
+  std::vector<std::vector<std::size_t>> F_symbols(n_blocks, // rows 
+    std::vector<std::size_t>(n_interfaces, 0)); // columns
+  std::vector<std::vector<std::size_t>> FT_symbols(n_interfaces, // rows
+    std::vector<std::size_t>(n_blocks, 0)); // columns
 
+  // set F_symbols, FT_symbols
+  for (std::size_t row = 0; row < n_blocks; ++row) {
+    for (std::size_t col = 0; col < n_blocks; ++col) {
+      std::size_t interface = interfaces[row][col];
+      if (interface != 0 and row == col - 1) {  
+        F_symbols[row][interface - 1] = n;
+        F_symbols[col][interface - 1] = s;
+        FT_symbols[interface - 1][row] = n;
+        FT_symbols[interface - 1][col] = s;
+      }
+      else if (interface != 0 and row == col - 3) {  
+        F_symbols[row][interface - 1] = w;
+        F_symbols[col][interface - 1] = e;
+        FT_symbols[interface - 1][row] = w;
+        FT_symbols[interface - 1][col] = e;
+      }
+    }
+  }
+
+  auto [rows, cols] = blocks[0];
+  auto spacing = rows.to - rows.from;
+  auto span = spacing;
+  auto n_points_x = rows.size();
+
+  std::cout << "Square hybrid specs:" << std::endl 
+    << " | local problem size: " << n_points_x << " x " << n_points_x 
+    << std::endl << " | span: " << span 
+    << std::endl << " | total blocks: " << n_blocks 
+    << std::endl << " | total interfaces: " << n_interfaces 
+    << std::endl;
+
+
+  std::cout << n_points_x << ", " << span << std::endl;
+
+  // n_points = number of columns in 
+  //            matrix component. 
+
+  // components class contains most of the sbp-sat component matrices
+  // needed to set up an sbp-sat problem.
+  auto sbp = components{11, span};
+
+  sbp.τ = 42.; // hard code these coeffs for now. 
+  sbp.β = 1.;
+
+  // std::size_t g_size = n_blocks * n_interfaces;
+
+  // F components are stored as vectors because we compute
+  // M^-1 F by solving every row each component. 
+  auto f = std::vector<std::vector<petsc_vector>>(
+    4, std::vector<petsc_vector>(n_blocks));  
+ 
+  make_f_subs(sbp, f);
+
+  auto m = std::vector<petsc_matrix>(n_blocks);
+
+  
+  std::size_t bw, be, bn, bs;
   std::cout << local_problems << " local problems." << std::endl;
-
   for (std::size_t row = 0; row != blocks.size(); ++row) {
     for (std::size_t col = 0; col != blocks.size(); ++col) {
 
       auto matrix_index = blocks.size() * row + col;
-      auto matrix_block = M[matrix_index];
 
       auto [row_x1, col_x1] = blocks[row];
       auto [row_x2, col_x2] = blocks[col]; 
 
-      (void) col_x1; (void) row_x2; /* unused */
+      (void) col_x1; (void) row_x2; // unused
 
-      w = neumann;
-      e = neumann;
-      n = col == 0                 ? dirichlet : neumann;
-      s = col == blocks.size() - 1 ? dirichlet : neumann;
+      bw = neumann;
+      be = neumann;
+      bn = col == 0                 ? dirichlet : neumann;
+      bs = col == blocks.size() - 1 ? dirichlet : neumann;
 
-      x2::write_m(matrix_block, blocks[row], blocks[col], {w, e, n, s});
+      x2::write_m(m[matrix_index], blocks[row], blocks[col], {bw, be, bn, bs});
 
       auto m_index = (row * blocks.size()) + col + 1;
       auto ordinal = 
@@ -161,6 +239,65 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
     }
   }
 
+  // MatView(m[n_blocks - 1], PETSC_VIEWER_STDOUT_SELF);
+  
+  
+  std::cout << m.size() << " = m size " << std::endl;
+
+  petsc_matrix II;
+  MatCreateConstantDiagonal(PETSC_COMM_SELF, 
+    11, 11, PETSC_DECIDE, PETSC_DECIDE, 1., &II);
+  finalize<fw>(II);
+  
+  MatView(II, PETSC_VIEWER_STDOUT_SELF);
+
+  // auto solvers = std::vector<KSP>(m.size());
+  KSP solvers[9];
+  for (std::size_t i = 0; i != m.size(); ++i) {
+    solvers[i] = KSP();
+    KSPCreate(PETSC_COMM_SELF, &solvers[i]); 
+    KSPSetOperators(solvers[i], m[i], m[i]);
+    // KSPSetUp(solvers[i]);
+    int msz, nsz;
+    MatGetSize(m[i], &msz, &nsz); std::cout 
+    << "m size " << msz << ",  " << nsz << std::endl;
+  }
+
+  // Compute M^-1 F
+  auto mf = std::vector<std::vector<petsc_vector>>(
+    4 * n_blocks, std::vector<petsc_vector>(sbp.n)); 
+  std::cout << "allocate mf" << std::endl; 
+  for (std::size_t i = 0; i != 4 * n_blocks; ++i) {
+    for (std::size_t j = 0; j != sbp.n; ++j) {
+      VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &mf[i][j]);
+    }
+  }
+
+  std::cout << "m size: " << m.size() << std::endl;
+  std::cout << "f size: " << f.size() << ", " << f[0].size()<< std::endl;
+  std::cout << "mf size: " << mf.size() << ", " << mf[0].size() << std::endl;
+
+  msolvef(mf, &solvers[0], n_blocks, f);
+  
+  std::cout << "solved mf" << std::endl;
+
+  std::cout << "end." << std::endl;
+  for (std::size_t i = 0; i != 9; ++i) KSPDestroy(&solvers[i]);
+  for (auto &e : m)  destroy<fw>(e);
+
+  // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
+  // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
+  // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
+  // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
+
+  #ifdef SOMETHINGUNDEFINED
+
+  auto M = std::vector<petsc_matrix>(local_problems); 
+
+  
+
+  auto F  = std::vector<petsc_matrix>(blocks.size()); 
+  auto Ft = std::vector<petsc_matrix>(blocks.size()); 
   lazy_f(F[0], F[1], F[2]);
   std::cout << "Assembled F blocks (lazy.)" << std::endl;
   lazy_ft(F, Ft);
@@ -171,11 +308,6 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   auto g_bar = std::vector<petsc_vector>(local_problems); 
 
   std::size_t g_size = blocks.size() * boundaries.size();
-
-  auto L = std::vector<petsc_matrix>(g_size);
-  write_Ls(L, boundaries);
-
-  for (auto &l : L) MatView(l, PETSC_VIEWER_STDOUT_SELF);
 
   for (std::size_t row = 0; row != blocks.size(); ++row) {
     for (std::size_t col = 0; col != blocks.size(); ++col) {
@@ -191,6 +323,8 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   for (auto &e : F)  MatDestroy(&e);
   for (auto &e : Ft) MatDestroy(&e);
   for (auto &e : L) MatDestroy(&e);
+
+  #endif
 }
 
 void sbp_sat::x2::
@@ -265,8 +399,8 @@ write_m(
   MatCompositeAddMat(m, Ax1);
   MatCompositeAddMat(m, Ax2);
 
-  /* Append boundary condition coefficients as new matrices to the 
-     composite matrix, m. */
+  // Append boundary condition coefficients as new matrices to the 
+  // composite matrix, m. 
   add_boundary<x, left> (m, rows, cols, bsx1, hx2, β, τ, bc[0]);
   add_boundary<x, right>(m, rows, cols, bsx1, hx2, β, τ, bc[1]);
   add_boundary<y, left> (m, rows, cols, bsx1, hx2, β, τ, bc[2]);
@@ -351,4 +485,115 @@ void sbp_sat::x2::write_Ls(
     }   
   }
 }
+
+void write_Lts(
+  std::vector<sbp_sat::petsc_matrix> &L,
+  std::vector<sbp_sat::petsc_matrix> &Lt) { 
+
+    for (auto i = std::size_t(0); i != L.size(); ++i) {
+      MatTranspose(L[i], MAT_INITIAL_MATRIX, &Lt[Lt.size() - i]);
+      linalg::finalize<sbp_sat::x2::fw>(Lt[Lt.size() - i]);
+    }
+}
+
+// Compute x := A^(-1) b, i.e., solve A x = b
+void sbp_sat::x2::solve(
+  KSP &A, std::vector<petsc_vector> &b, std::vector<petsc_vector> &x) {
+    for (std::size_t i = 0; i < b.size(); ++i) {
+        KSPSolve(A, b[i], x[i]);
+    }
+}
+
+void sbp_sat::x2::fcompop(
+  petsc_matrix &f, 
+  petsc_matrix const &l, 
+  petsc_matrix const &b,
+  petsc_matrix const &h,
+  real_t       const τ, 
+  real_t       const β) {
+
+  petsc_matrix t;
+  MatMatMult(l, b, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &t);
+  MatScale(t, β);
+  MatAXPY(t, -τ, l, UNKNOWN_NONZERO_PATTERN);
+  MatMatMult(t, h, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &f);
+  finalize<fw>(f);
+  destroy<fw>(t);
+}
+
+void sbp_sat::x2::make_f_subs(
+  components const &sbp, 
+  std::vector<std::vector<petsc_vector>> &f) {
+
+  petsc_matrix f_n, f_s, f_e, f_w;
+
+  // (-τ * LN + β * LN* BS_y) * H_x 
+  fcompop(f_n, sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  // (-τ * LS + β * LS* BS_x) * H_x 
+  fcompop(f_s, sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  // (-τ * LW + β * LE* BS_y) * H_y 
+  fcompop(f_e, sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  // (-τ * LW + β * LW* BS_y) * H_y 
+  fcompop(f_w, sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+
+  int ncols;
+  int const *cols;
+  const double *vals;
+
+  f[0] = std::vector<petsc_vector>(sbp.n);
+  f[1] = std::vector<petsc_vector>(sbp.n);
+  f[2] = std::vector<petsc_vector>(sbp.n);
+  f[3] = std::vector<petsc_vector>(sbp.n);
+
+  for (std::size_t i = 0; i != sbp.n; ++i) {
+    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[0][i]);
+    MatGetRow(f_e, i, &ncols, &cols, &vals);
+    VecSetValues(f[0][i], ncols, cols, vals, ADD_VALUES);
+    finalize<fw>(f[0][i]);
+
+    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[1][i]);
+    MatGetRow(f_w, i, &ncols, &cols, &vals);
+    VecSetValues(f[1][i], ncols, cols, vals, ADD_VALUES);
+    finalize<fw>(f[1][i]);
+  
+    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[2][i]);
+    MatGetRow(f_s, i, &ncols, &cols, &vals);
+    VecSetValues(f[2][i], ncols, cols, vals, ADD_VALUES);
+    finalize<fw>(f[2][i]);
+  
+    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[3][i]);
+    MatGetRow(f_n, i, &ncols, &cols, &vals);
+    VecSetValues(f[3][i], ncols, cols, vals, ADD_VALUES);
+    finalize<fw>(f[3][i]);
+  }
+
+  destroy<fw>(f_n);
+  destroy<fw>(f_s);
+  destroy<fw>(f_e);
+  destroy<fw>(f_w);
+}
+
+void sbp_sat::x2::msolvef(
+  std::vector<std::vector<petsc_vector>> &x,
+  KSP *m,
+  std::size_t size,
+  std::vector<std::vector<petsc_vector>> &f) {
+
+  std::size_t index = 0;
+  for (std::size_t i = 0; i != size; ++i) { //  ------------ n blocks
+    for (std::size_t j = 0; j != f.size(); ++j) { // ------- 4
+      for (std::size_t k = 0; k != f[j].size(); ++k) { // -- n blocks
+        std::cout << "solve with block " << i << " on "
+          << " f slice " << j << ", " << k << " into x index " 
+          << index << ", " << k << std::endl;
+        KSPSolve(m[i], f[j][k], x[index][k]);
+      }
+      index += 1;
+    }
+  }
+}
+ 
+
+
+
 
