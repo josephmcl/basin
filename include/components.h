@@ -60,6 +60,8 @@ namespace sbp_sat {
     petsc_matrix ln, ls, le, lw;  
     petsc_matrix d2x, d2y;
 
+    std::vector<real_t> h1v;
+
   private: 
     void make_bs();
     void make_l();

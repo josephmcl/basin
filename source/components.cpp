@@ -94,12 +94,15 @@ void sbp_sat::x2::components::
   real_t const v = (1. / 2.) * spacing;
   MatSetValue(h1x, 0, 0, v, ADD_VALUES);
   MatSetValue(h1y, 0, 0, v, ADD_VALUES);
+  h1v.push_back(v);
   for (std::size_t i = 1; i != n - 1; ++i) {
     MatSetValue(h1x, i, i, spacing, ADD_VALUES);
     MatSetValue(h1y, i, i, spacing, ADD_VALUES);
+    h1v.push_back(spacing);
   }
   MatSetValue(h1x, n - 1, n - 1, v, ADD_VALUES);
   MatSetValue(h1y, n - 1, n - 1, v, ADD_VALUES);
+  h1v.push_back(v);
 
   finalize<fw>(h1x);
   finalize<fw>(h1y);

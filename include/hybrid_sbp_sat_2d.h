@@ -459,11 +459,16 @@ void fcompop(
   real_t       const τ, 
   real_t       const β);
 
-void msolvef(
+void compute_mf(
   std::vector<std::vector<petsc_vector>> &msf,
   KSP *m,
   std::size_t size,
   std::vector<std::vector<petsc_vector>> &f);
+
+void make_D(
+  petsc_matrix &D, 
+  components const &sbp, 
+  std::vector<std::vector<std::size_t>> const &interfaces);
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

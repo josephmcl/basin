@@ -271,19 +271,32 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
     for (std::size_t j = 0; j != sbp.n; ++j) {
       VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &mf[i][j]);
     }
-  }
+  } 
 
-  std::cout << "m size: " << m.size() << std::endl;
-  std::cout << "f size: " << f.size() << ", " << f[0].size()<< std::endl;
-  std::cout << "mf size: " << mf.size() << ", " << mf[0].size() << std::endl;
+  // MF {M0 FW, M0 FE, M0 FS, M0 MN, M1 FW, ..., MN FN}
 
-  msolvef(mf, &solvers[0], n_blocks, f);
-  
-  std::cout << "solved mf" << std::endl;
+  petsc_matrix D;
+  make_D(D, sbp, interfaces);
+
+  MatView(D, PETSC_VIEWER_STDOUT_SELF);
+
+  compute_mf(mf, &solvers[0], n_blocks, f);
+  // compute_ftmf(ftmf, mf, f)
+  // lambda_matrix = compute_dftmf()  
+
+  // 1: λ_matrix =  d - ft * m \ f 
+  // 2: λ_rhs    = gd - ft * m \ g 
+  // 3: λ = λ_matrix \ λ_rhs
+
+  // compute_mg() 
+
+
 
   std::cout << "end." << std::endl;
   for (std::size_t i = 0; i != 9; ++i) KSPDestroy(&solvers[i]);
   for (auto &e : m)  destroy<fw>(e);
+
+    destroy<fw>(D);
 
   // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
   // STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP STOP 
@@ -573,7 +586,54 @@ void sbp_sat::x2::make_f_subs(
   destroy<fw>(f_w);
 }
 
-void sbp_sat::x2::msolvef(
+void sbp_sat::x2::make_D(
+  petsc_matrix      &D, 
+  components  const &sbp, 
+  std::vector<std::vector<std::size_t>> const &interfaces) {
+
+  /* D = [H1y * 2 * τ,                              ]
+         [             H1y * 2 * τ,                 ]
+         [                        , ...,            ]
+         [                               H1y * 2 * τ] 
+
+  NOTE: either H1x or H1y for corresponding interface 
+        orientations (NS or EW). */
+
+  std::size_t n_interfaces = 0;
+  for (std::size_t row = 0; row != interfaces.size(); ++row) {
+    for (std::size_t col = 0; col != interfaces.size(); ++col) {
+      std::size_t interface = interfaces[row][col];
+      if (interface != 0) n_interfaces += 1;
+    }
+  }
+
+  std::size_t size = sbp.n * n_interfaces;
+  MatCreateSeqAIJ(PETSC_COMM_SELF, size, size, 1, nullptr, &D);
+
+  std::size_t interface, index, value;
+  for (std::size_t row = 0; row != interfaces.size(); ++row) {
+    for (std::size_t col = 0; col != interfaces.size(); ++col) {
+      interface = interfaces[row][col];
+      if (interface != 0 and row == col - 1) {  // NS 
+        index = (interface - 1) * sbp.n; 
+        for (std::size_t k = 0; k != sbp.n; ++k) {
+          value = sbp.h1v[k] * 2 * sbp.τ;
+          MatSetValue(D, index + k,  index + k, value, ADD_VALUES);
+        }
+      }
+      else if (interface != 0) {  // EW
+        index = (interface - 1) * sbp.n; 
+        for (std::size_t k = 0; k != sbp.n; ++k) {
+          value = sbp.h1v[k] * 2 * sbp.τ;
+          MatSetValue(D, index + k,  index + k, value, ADD_VALUES);
+        }
+      }
+    }
+  }
+  finalize<fw>(D);
+}
+
+void sbp_sat::x2::compute_mf(
   std::vector<std::vector<petsc_vector>> &x,
   KSP *m,
   std::size_t size,
