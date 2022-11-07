@@ -167,7 +167,7 @@ void main_2d() {
   
   using namespace sbp_sat;
 
-  nat_t bsz = 11;
+  nat_t bsz = 4;
   real_v u = {};
 
   block_v b = { 

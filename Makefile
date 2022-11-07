@@ -44,9 +44,9 @@ objects_and_test_objects += $(test_objects)
 rm = rm -f
 
 gccflags = -std=c++2a -Wall -Wpedantic -g \
-		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8
+		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8 
 
-compiler_flags := $(gccflags)
+compiler_flags := $(gccflags) 
 
 openblas_include := -I$(OPENBLAS_INCLUDE)
 petsc_include    := -I${PETSC_INCLUDE}
@@ -58,10 +58,10 @@ includes := -I./$(header_directory) $(petsc_include) \
 
 test_includes := $(includes) -I./$(test_directory)
 
-cernroot_library := -L${CERN_ROOT_LIBRARY}
+cernroot_library := -L${CERN_ROOT_LIBRARY} #--with-debugging=yes
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
- libraries := -L/opt/homebrew/lib -lpetsc -lpthread -lmpi #$(cernroot_library)
+ libraries := -L/opt/homebrew/lib -lpetsc -lpthread -lmpi  #$(cernroot_library) 
 
 define speaker
 	@echo [make:$$PPID] $(1)
@@ -81,11 +81,11 @@ $(binary_directory)/$(test_target): $(objects) $(test_objects)
 
 $(objects): $(object_directory)/%.o: $(source_directory)/%.$(source_ext)
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(includes))
+	$(cc) $(compiler_flags) -c $< -o $@ $(includes)) 
 
 $(test_objects): $(object_directory)/%.o : $(test_directory)/%.cpp
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(test_includes))
+	$(cc) $(compiler_flags) -c $< -o $@ $(test_includes)) 
 
 
 .PHONY: clean

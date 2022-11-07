@@ -29,9 +29,14 @@
 namespace sbp_sat { 
 
   using nat_t = std::size_t;
-  // using real_t = type::real_t;  
+  using real_t = type::real_t;  
+  
+  template <typename t> 
+  using vv = type::vv<t>;
+  
   // using vector_t = std::vector<real_t>;
   using real_v = std::vector<real_t>;
+  using size_v = std::vector<std::size_t>;
   using range_t = numerics::linrange<real_t>;
 
   using block_t = std::tuple<range_t, range_t>; 
@@ -67,8 +72,8 @@ namespace x2 {
 
   auto constexpr transposed = true;
 
-  std::size_t constexpr neumann   = 1;
-  std::size_t constexpr dirichlet = 2;
+  std::size_t constexpr dirichlet = 1;
+  std::size_t constexpr neumann   = 2;
   std::size_t constexpr x         = 0;
   std::size_t constexpr y         = 1;
   std::size_t constexpr left      = 0;
@@ -446,10 +451,15 @@ void add_boundary(
   MatCompositeAddMat(M, result);
 }
 
-void solve(KSP &A, std::vector<petsc_vector> &b, std::vector<petsc_vector> &x);
-void make_f_subs(
+void solve(
+  KSP &A, 
+  std::vector<petsc_vector> &b, 
+  std::vector<petsc_vector> &x);
+
+void make_F(
   components const &sbp, 
-  std::vector<std::vector<petsc_vector>> &f);
+  std::vector<petsc_matrix> &F,
+  vv<petsc_vector> &f);
 
 void fcompop(
   petsc_matrix &f, 
@@ -460,15 +470,39 @@ void fcompop(
   real_t       const β);
 
 void compute_mf(
-  std::vector<std::vector<petsc_vector>> &msf,
-  KSP *m,
-  std::size_t size,
-  std::vector<std::vector<petsc_vector>> &f);
+  vv<petsc_vector>       &x,
+  std::vector<KSP> const &m,
+  vv<petsc_vector> const &f);
 
+void compute_ftmf(
+  vv<petsc_matrix>       &FTMF, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp);
+
+void ftmfcompop(
+  petsc_matrix                    &FTMF, 
+  std::vector<petsc_vector> const &F, 
+  std::vector<petsc_vector> const &MF);
+
+// Make the D sub-matrix of the hybrid formulation. 
 void make_D(
-  petsc_matrix &D, 
+  petsc_matrix          &D, 
+  components      const &sbp, 
+  vv<std::size_t> const &interfaces);
+
+void make_M(
+  petsc_matrix &M,
   components const &sbp, 
-  std::vector<std::vector<std::size_t>> const &interfaces);
+  std::array<std::size_t, 4> const &boundary);
+
+void make_M_boundary(
+  petsc_matrix &M,
+  components const &sbp, 
+  std::size_t const direction,
+  std::size_t const boundary);
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

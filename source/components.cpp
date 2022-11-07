@@ -73,8 +73,8 @@ make_l() {
   MatCreateSeqAIJ(PETSC_COMM_SELF, n, n2, 1, nullptr, &lw);
 
   for (std::size_t i = 0; i != n; ++i) {
-    MatSetValue(ln, i, n * i,  1., ADD_VALUES);
-    MatSetValue(ls, i, n * i + (n - 1),  1., ADD_VALUES);
+    MatSetValue(ls, i, n * i,  1., ADD_VALUES);
+    MatSetValue(ln, i, n * i + (n - 1),  1., ADD_VALUES);
     MatSetValue(le, i, n * (n - 1) + i, 1., ADD_VALUES);
     MatSetValue(lw, i, i, 1., ADD_VALUES);
   }
@@ -162,40 +162,43 @@ make_hl() {
 void sbp_sat::x2::components:: 
 make_d2() {
 
-  /*
-  auto h = numerical::operators::H(n, 2, 0, span);
-
-  for (auto e :h) std::cout << e << " ";
-  std::cout << std::endl;
-
-  petsc_matrix d2;
-  MatCreateSeqAIJ(PETSC_COMM_SELF, n, n, 3, nullptr, &d2);
+  std::size_t const n2 = n * n;
+  MatCreateSeqAIJ(PETSC_COMM_SELF, n2, n2, 3, nullptr, &d2x);
+  MatCreateSeqAIJ(PETSC_COMM_SELF, n2, n2, 3, nullptr, &d2y);
 
   real_t spacing2 = (spacing * spacing) / ((n - 1) * (n - 1));
-  real_t coeff = -2.;
+  real_t coeff = 2.;
 
-  // Initialize the first local skew row. 
-  MatSetValue(d2, 0, 0,  1. / spacing2 * h[0] * coeff, ADD_VALUES);
-  MatSetValue(d2, 0, 1, -2. / spacing2 * h[0] * coeff, ADD_VALUES);
-  MatSetValue(d2, 0, 2,  1. / spacing2 * h[0] * coeff, ADD_VALUES); 
+  std::size_t jn, in;
+  for (std::size_t j = 0; j != n; ++j) {  
+    jn = j * n;
 
-  // Initialize the final local skew row. 
-  MatSetValue(d2, n - 1, n - 3,  1. / spacing2 * h[n - 1] * coeff, ADD_VALUES);
-  MatSetValue(d2, n - 1, n - 2, -2. / spacing2 * h[n - 1] * coeff, ADD_VALUES);
-  MatSetValue(d2, n - 1, n - 1,  1. / spacing2 * h[n - 1] * coeff, ADD_VALUES); 
+    MatSetValue(d2x, j + 0, j + 0,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES);
+    MatSetValue(d2x, j + 0, j + 1 * n, -2. / spacing2 * h1v[0] * coeff, ADD_VALUES);
+    MatSetValue(d2x, j + 0, j + 2 * n,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES); 
+    MatSetValue(d2x, j + n2 - n, j + n2 - 3 * n,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
+    MatSetValue(d2x, j + n2 - n, j + n2 - 2 * n, -2. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
+    MatSetValue(d2x, j + n2 - n, j + n2 - 1 * n,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES); 
 
-  // Initialize the interior local diagonal rows. 
-  for (auto i = 1; i != n - 1; ++i) {  
-    MatSetValue(d2, i, i - 1,  1. / spacing2 * h[i] * coeff, ADD_VALUES);
-    MatSetValue(d2, i, i,     -2. / spacing2 * h[i] * coeff, ADD_VALUES);
-    MatSetValue(d2, i, i + 1,  1. / spacing2 * h[i] * coeff, ADD_VALUES);  
+    MatSetValue(d2y, jn + 0, jn + 0,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES);
+    MatSetValue(d2y, jn + 0, jn + 1, -2. / spacing2 * h1v[0] * coeff, ADD_VALUES);
+    MatSetValue(d2y, jn + 0, jn + 2,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES); 
+    MatSetValue(d2y, jn + n - 1, jn + n - 3,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
+    MatSetValue(d2y, jn + n - 1, jn + n - 2, -2. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
+    MatSetValue(d2y, jn + n - 1, jn + n - 1,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES); 
+    for (std::size_t i = 1; i != n - 1; ++i) {  
+        in = i * n;
+
+        MatSetValue(d2x, in + j, in + j - n,  1. / spacing2 * h1v[i], ADD_VALUES);
+        MatSetValue(d2x, in + j, in + j,     -2. / spacing2 * h1v[i], ADD_VALUES);
+        MatSetValue(d2x, in + j, in + j + n,  1. / spacing2 * h1v[i], ADD_VALUES);  
+
+        MatSetValue(d2y, jn + i, jn + i - 1,  1. / spacing2 * h1v[i], ADD_VALUES);
+        MatSetValue(d2y, jn + i, jn + i,     -2. / spacing2 * h1v[i], ADD_VALUES);
+        MatSetValue(d2y, jn + i, jn + i + 1,  1. / spacing2 * h1v[i], ADD_VALUES);  
+    }
   }
 
-  finalize<fw>(d2);
-
-  MatView(d2, PETSC_VIEWER_STDOUT_SELF);
-
-  destroy<fw>(d2);
-  */
-
+  finalize<fw>(d2x);
+  finalize<fw>(d2y);
 }

@@ -125,7 +125,17 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
       | ... | ... | bn-1 |  */
 
   std::vector<std::vector<std::size_t>> interfaces = {
-    {0, 1, 0, 7, 0, 0, 0, 0, 0}, 
+    {0, 1, 0, 3, 0, 0, 0, 0, 0}, 
+    {0, 0, 2, 0, 4, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 5, 0, 0, 0}, 
+    {0, 0, 0, 0, 6, 0, 8, 0, 0}, 
+    {0, 0, 0, 0, 0, 7, 0, 9, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 10}, 
+    {0, 0, 0, 0, 0, 0, 0, 11, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 12}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0}};
+/*
+   {{0, 1, 0, 7, 0, 0, 0, 0, 0}, 
     {0, 0, 2, 0, 8, 0, 0, 0, 0}, 
     {0, 0, 0, 0, 0, 9, 0, 0, 0}, 
     {0, 0, 0, 0, 3, 0, 10, 0, 0}, 
@@ -134,6 +144,31 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
     {0, 0, 0, 0, 0, 0, 0, 5, 0}, 
     {0, 0, 0, 0, 0, 0, 0, 0, 6}, 
     {0, 0, 0, 0, 0, 0, 0, 0, 0}};
+
+
+
+    {0, 1, 0, 3, 0, 0, 0, 0, 0}, 
+    {0, 0, 2, 0, 4, 0, 0, 0, 0}, 
+    {0, 0, 0, 0, 0, 5, 0, 0, 0}, 
+    {0, 0, 0, 0, 6, 0, 7, 0, 0}, 
+    {0, 0, 0, 0, 0, 8, 0, 9, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 10}, 
+    {0, 0, 0, 0, 0, 0, 0, 11, 0}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 12}, 
+    {0, 0, 0, 0, 0, 0, 0, 0, 0}};
+
+  1   0   4.0   0    0    0    0    0    0    0    ⋅    ⋅ 
+   2  1.0   ⋅   4.0   ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅ 
+  ⋅   2.0   ⋅    ⋅   4.0  0.0   ⋅    ⋅    ⋅    ⋅    ⋅    ⋅ 
+  ⋅    ⋅   3.0   ⋅   0.0  1.0   ⋅   4.0   ⋅    ⋅    ⋅    ⋅ 
+  ⋅    ⋅    ⋅   3.0  0.0  2.0  1.0   ⋅   4.0   ⋅    ⋅    ⋅ 
+  ⋅    ⋅    ⋅    ⋅   3.0  0.0  2.0   ⋅    ⋅   4.0  0.0   ⋅ 
+  ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅   3.0   ⋅   0.0  1.0   ⋅ 
+  ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅   3.0  0.0  2.0  1.0
+  ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅    ⋅   3.0  0.0  2.0
+
+
+*/
 
   std::size_t n_interfaces = 0;
   for (auto &row : interfaces) {
@@ -147,9 +182,9 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   constexpr std::size_t w = 1; constexpr std::size_t e = 2; 
   constexpr std::size_t s = 3; constexpr std::size_t n = 4; 
 
-  std::vector<std::vector<std::size_t>> F_symbols(n_blocks, // rows 
+  vv<std::size_t> F_symbols(n_blocks, // rows 
     std::vector<std::size_t>(n_interfaces, 0)); // columns
-  std::vector<std::vector<std::size_t>> FT_symbols(n_interfaces, // rows
+  vv<std::size_t> FT_symbols(n_interfaces, // rows
     std::vector<std::size_t>(n_blocks, 0)); // columns
 
   // set F_symbols, FT_symbols
@@ -169,6 +204,13 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
         FT_symbols[interface - 1][col] = e;
       }
     }
+  }
+
+  for (auto &row : F_symbols) {
+    for (auto &e : row) {
+      std::cout << e << " ";
+    }
+    std::cout << std::endl;
   }
 
   auto [rows, cols] = blocks[0];
@@ -191,23 +233,41 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   // components class contains most of the sbp-sat component matrices
   // needed to set up an sbp-sat problem.
-  auto sbp = components{11, span};
+  auto sbp = components{4, span};
 
   sbp.τ = 42.; // hard code these coeffs for now. 
   sbp.β = 1.;
 
+  sbp.n_blocks = n_blocks; 
+  sbp.n_interfaces = n_interfaces;
+
+
+  auto M = std::vector<petsc_matrix>(sbp.n_blocks);
+
+  sbp_sat::x2::make_M(M[0], sbp, {1, 1, 1, 2});
+
+  // - H_tilde*(D2_x + D2_y)
+
+  
+
+  // for (std::size_t block = 0; block < sbp.n_blocks; ++block) {
+  //   MatCopy(Mat A, M[block], DIFFERENT_NONZERO_PATTERN);
+  // }
+
+  exit(-1);
   // std::size_t g_size = n_blocks * n_interfaces;
 
   // F components are stored as vectors because we compute
-  // M^-1 F by solving every row each component. 
+  // M^-1 F by solving every row for each component. 
   auto f = std::vector<std::vector<petsc_vector>>(
     4, std::vector<petsc_vector>(n_blocks));  
- 
-  make_f_subs(sbp, f);
+  auto F = std::vector<petsc_matrix>(4);  
+  make_F(sbp, F, f);
 
   auto m = std::vector<petsc_matrix>(n_blocks);
 
-  
+
+
   std::size_t bw, be, bn, bs;
   std::cout << local_problems << " local problems." << std::endl;
   for (std::size_t row = 0; row != blocks.size(); ++row) {
@@ -244,15 +304,13 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   
   std::cout << m.size() << " = m size " << std::endl;
 
-  petsc_matrix II;
-  MatCreateConstantDiagonal(PETSC_COMM_SELF, 
-    11, 11, PETSC_DECIDE, PETSC_DECIDE, 1., &II);
-  finalize<fw>(II);
-  
-  MatView(II, PETSC_VIEWER_STDOUT_SELF);
 
-  // auto solvers = std::vector<KSP>(m.size());
-  KSP solvers[9];
+  MatView(m[0], PETSC_VIEWER_STDOUT_SELF);
+
+  exit(-1);
+  
+  auto solvers = std::vector<KSP>(m.size());
+  // KSP solvers[9];
   for (std::size_t i = 0; i != m.size(); ++i) {
     solvers[i] = KSP();
     KSPCreate(PETSC_COMM_SELF, &solvers[i]); 
@@ -264,12 +322,12 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   }
 
   // Compute M^-1 F
-  auto mf = std::vector<std::vector<petsc_vector>>(
+  auto MF = std::vector<std::vector<petsc_vector>>(
     4 * n_blocks, std::vector<petsc_vector>(sbp.n)); 
-  std::cout << "allocate mf" << std::endl; 
+  std::cout << "allocate MF" << std::endl; 
   for (std::size_t i = 0; i != 4 * n_blocks; ++i) {
     for (std::size_t j = 0; j != sbp.n; ++j) {
-      VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &mf[i][j]);
+      VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &MF[i][j]);
     }
   } 
 
@@ -278,13 +336,61 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   petsc_matrix D;
   make_D(D, sbp, interfaces);
 
-  MatView(D, PETSC_VIEWER_STDOUT_SELF);
+  // MatView(D, PETSC_VIEWER_STDOUT_SELF);
 
-  compute_mf(mf, &solvers[0], n_blocks, f);
-  // compute_ftmf(ftmf, mf, f)
+  compute_mf(MF, solvers, f);
+
+  int vn = sbp.n * sbp.n;
+  auto vi = std::vector<int>(sbp.n * sbp.n);
+  auto vy = std::vector<double>(sbp.n * sbp.n);
+  for (auto i = 0; i < vn; ++i) vi[i] = i;
+  
+  petsc_matrix gMF;
+  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n_blocks * sbp.n * sbp.n,
+    sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n, nullptr, 
+    &gMF);
+  for (std::size_t i = 0; i < sbp.n_blocks; ++i) {
+    for (std::size_t j = 0; j < sbp.n_interfaces; ++j) {
+      if (F_symbols[i][j] > 0) {
+        for (std::size_t k = 0; k < sbp.n; ++k) {
+          std::size_t index = (k * i) + F_symbols[i][j] - 1;
+          std::size_t ii = i * sbp.n * sbp.n;
+          std::size_t jj = j * sbp.n;
+          // gMF[index][k]
+          VecGetValues(MF[index][k], vn, &vi[0], &vy[0]);
+          for (std::size_t l = 0; l < sbp.n * sbp.n; ++l) {
+            std::cout << ii + l << ", " << jj + k << std::endl;
+            MatSetValue(gMF, ii + l, jj + k, vy[l], ADD_VALUES);
+          }
+        }
+      }
+    }
+  }
+
+  finalize<fw>(gMF);
+  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  MatView(gMF, PETSC_VIEWER_STDOUT_SELF);
+
+  auto FTMF = vv<petsc_matrix>(n_interfaces,
+    std::vector<petsc_matrix>(n_interfaces));
+  for (std::size_t i = 0; i != n_interfaces; ++i) {
+    for (std::size_t j = 0; j != n_interfaces; ++j) {
+        MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n, sbp.n, 
+          sbp.n, nullptr, &FTMF[i][j]);
+    }
+  }
+
+  // petsc_matrix FTMF;
+  // std::size_t nftmf = sbp.n * n_interfaces;
+  // MatCreateSeqAIJ(PETSC_COMM_SELF, nftmf, nftmf,
+  //   1, nullptr, &FTMF);
+  // compute_ftmf(FTMF, f, mf, F_symbols, FT_symbols, sbp);
+
+  //MatView(FTMF[0][0], PETSC_VIEWER_STDOUT_SELF);
+
   // lambda_matrix = compute_dftmf()  
 
-  // 1: λ_matrix =  d - ft * m \ f 
+  // 1: λ_matrix =  D - FT * M \ F 
   // 2: λ_rhs    = gd - ft * m \ g 
   // 3: λ = λ_matrix \ λ_rhs
 
@@ -365,7 +471,7 @@ write_m(
   auto hx2 = numerical::operators::H(cols.size(), 2, 0, x2_spacing);
 
   // hard code for now 
-  real_t τ = 1.;
+  real_t τ = 42.;
   real_t β = 1.;
 
   // hard code the second order bs matrix for now. 
@@ -534,20 +640,19 @@ void sbp_sat::x2::fcompop(
   destroy<fw>(t);
 }
 
-void sbp_sat::x2::make_f_subs(
+void sbp_sat::x2::make_F(
   components const &sbp, 
+  std::vector<petsc_matrix> &F,
   std::vector<std::vector<petsc_vector>> &f) {
 
-  petsc_matrix f_n, f_s, f_e, f_w;
-
   // (-τ * LN + β * LN* BS_y) * H_x 
-  fcompop(f_n, sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  fcompop(F[2], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
   // (-τ * LS + β * LS* BS_x) * H_x 
-  fcompop(f_s, sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
-  // (-τ * LW + β * LE* BS_y) * H_y 
-  fcompop(f_e, sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  fcompop(F[3], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  // (-τ * LE + β * LE* BS_y) * H_y 
+  fcompop(F[0], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
   // (-τ * LW + β * LW* BS_y) * H_y 
-  fcompop(f_w, sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  fcompop(F[1], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
 
   int ncols;
   int const *cols;
@@ -558,38 +663,37 @@ void sbp_sat::x2::make_f_subs(
   f[2] = std::vector<petsc_vector>(sbp.n);
   f[3] = std::vector<petsc_vector>(sbp.n);
 
+  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  MatView(F[2], PETSC_VIEWER_STDOUT_SELF);
+  MatView(F[3], PETSC_VIEWER_STDOUT_SELF);
+
   for (std::size_t i = 0; i != sbp.n; ++i) {
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[0][i]);
-    MatGetRow(f_e, i, &ncols, &cols, &vals);
+    MatGetRow(F[0], i, &ncols, &cols, &vals);
     VecSetValues(f[0][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[0][i]);
 
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[1][i]);
-    MatGetRow(f_w, i, &ncols, &cols, &vals);
+    MatGetRow(F[1], i, &ncols, &cols, &vals);
     VecSetValues(f[1][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[1][i]);
   
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[2][i]);
-    MatGetRow(f_s, i, &ncols, &cols, &vals);
+    MatGetRow(F[2], i, &ncols, &cols, &vals);
     VecSetValues(f[2][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[2][i]);
   
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[3][i]);
-    MatGetRow(f_n, i, &ncols, &cols, &vals);
+    MatGetRow(F[3], i, &ncols, &cols, &vals);
     VecSetValues(f[3][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[3][i]);
   }
-
-  destroy<fw>(f_n);
-  destroy<fw>(f_s);
-  destroy<fw>(f_e);
-  destroy<fw>(f_w);
 }
 
 void sbp_sat::x2::make_D(
-  petsc_matrix      &D, 
-  components  const &sbp, 
-  std::vector<std::vector<std::size_t>> const &interfaces) {
+  petsc_matrix          &D, 
+  components      const &sbp, 
+  vv<std::size_t> const &interfaces) {
 
   /* D = [H1y * 2 * τ,                              ]
          [             H1y * 2 * τ,                 ]
@@ -597,7 +701,8 @@ void sbp_sat::x2::make_D(
          [                               H1y * 2 * τ] 
 
   NOTE: either H1x or H1y for corresponding interface 
-        orientations (NS or EW). */
+        orientations (NS or EW). For now we use h1v because 
+        h1x and h1y are identical in this current config. */
 
   std::size_t n_interfaces = 0;
   for (std::size_t row = 0; row != interfaces.size(); ++row) {
@@ -634,13 +739,12 @@ void sbp_sat::x2::make_D(
 }
 
 void sbp_sat::x2::compute_mf(
-  std::vector<std::vector<petsc_vector>> &x,
-  KSP *m,
-  std::size_t size,
-  std::vector<std::vector<petsc_vector>> &f) {
+  vv<petsc_vector>       &x,
+  std::vector<KSP> const &m,
+  vv<petsc_vector> const &f) {
 
   std::size_t index = 0;
-  for (std::size_t i = 0; i != size; ++i) { //  ------------ n blocks
+  for (std::size_t i = 0; i != m.size(); ++i) { //  -------- n blocks
     for (std::size_t j = 0; j != f.size(); ++j) { // ------- 4
       for (std::size_t k = 0; k != f[j].size(); ++k) { // -- n blocks
         std::cout << "solve with block " << i << " on "
@@ -653,6 +757,203 @@ void sbp_sat::x2::compute_mf(
   }
 }
  
+void sbp_sat::x2::compute_ftmf(
+  vv<petsc_matrix>       &FTMF, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp) {
+
+  std::size_t findex;
+  std::size_t mindex;
+
+  std::cout << "FTMF size :" << FTMF.size() << ", " 
+    << FTMF[0].size() << std::endl;
+
+  std::cout << "F size :" << F.size() << ", " 
+    << F[0].size() << std::endl;
+
+  std::cout << "MF size :" << MF.size() << ", " 
+    << MF[0].size() << std::endl;
+
+  // NOTE: j and k are both bound to block indices.
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+        if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+          findex = FT_symbols[i][k] - 1;
+          mindex = (k * 4) + F_symbols[k][j] - 1;
+          // findex = 0;
+          // mindex = 0;
+          std::cout << "Compute FTMF super-index " << i 
+           << ", " << j << " (" << FT_symbols[i][k] << "), (" 
+           << F_symbols[k][j] << ")" << std::endl;
+          ftmfcompop(FTMF[i][j], F[findex], MF[mindex]); 
+        }
+      }
+      finalize<fw>(FTMF[i][j]);
+    }
+  }
+}
+
+void sbp_sat::x2::ftmfcompop(
+  petsc_matrix                    &FTMF, 
+  std::vector<petsc_vector> const &F, 
+  std::vector<petsc_vector> const &MF) {
+
+  double v;
+  for (std::size_t i = 0; i != F.size(); ++i) {
+    for (std::size_t j = 0; j != MF.size(); ++j) {
+      v = 0.;
+      VecTDot(F[i], MF[j], &v);
+      MatSetValue(FTMF, i, j, v, ADD_VALUES); 
+    }
+  } 
+}
+
+void sbp_sat::x2::make_M(
+  petsc_matrix &M,
+  components const &sbp, 
+  std::array<std::size_t, 4> const &boundary) {
+
+  petsc_matrix temp1, temp2; 
+  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
+    &temp1);
+  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
+    &temp2);
+  finalize<fw>(temp1);
+  finalize<fw>(temp2);
+
+  MatAXPY(temp1, 1., sbp.d2x, UNKNOWN_NONZERO_PATTERN);
+  MatAXPY(temp1, 1., sbp.d2y, UNKNOWN_NONZERO_PATTERN);
+  MatAXPY(temp2, -1., sbp.hl, UNKNOWN_NONZERO_PATTERN);
+
+  MatMatMult(temp2, temp1, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &M);
+
+  make_M_boundary(M, sbp, 1, boundary[0]);
+  make_M_boundary(M, sbp, 2, boundary[1]);
+  make_M_boundary(M, sbp, 3, boundary[2]);
+  make_M_boundary(M, sbp, 4, boundary[3]);
+
+  finalize<fw>(M);
+
+  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  MatView(M, PETSC_VIEWER_STDOUT_SELF);
+}
+
+void sbp_sat::x2::make_M_boundary(
+  petsc_matrix &M,
+  components const &sbp, 
+  std::size_t const direction,
+  std::size_t const boundary) {
+
+  auto L = direction == 1 ? sbp.lw 
+         : direction == 2 ? sbp.le
+         : direction == 3 ? sbp.ls 
+         : sbp.ln; 
+
+  auto H = direction < 3 ? sbp.hy : sbp.hx;
+  auto BS = direction < 3 ? sbp.bsx : sbp.bsy;
+
+  if (boundary == dirichlet) {
+
+    petsc_matrix LT, BST, temp1, temp2, temp3, temp4, temp5, temp6, 
+      temp7;
+
+    MatTranspose(L, MAT_INITIAL_MATRIX, &LT);
+    MatTranspose(BS, MAT_INITIAL_MATRIX, &BST);
+    finalize<fw>(LT);
+    finalize<fw>(BST);
+
+    // τ*H_y*LW'*LW 
+    MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
+      nullptr, &temp1);
+    finalize<fw>(temp1);    
+    MatAXPY(temp1, sbp.τ, H, UNKNOWN_NONZERO_PATTERN);    
+    MatMatMult(LT, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
+    finalize<fw>(temp2);    
+    MatMatMult(temp1, temp2, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp3);
+    finalize<fw>(temp3);
+    MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
+
+    // -β*H_y*BS_x'*LW'*LW
+    MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
+      nullptr, &temp4);
+    finalize<fw>(temp4);
+    MatAXPY(temp4, sbp.β, H, UNKNOWN_NONZERO_PATTERN);
+    MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
+    finalize<fw>(temp5);
+    MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);
+    finalize<fw>(temp6);
+    MatMatMult(temp6, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp7);
+    finalize<fw>(temp7);
+    MatAXPY(M, -1., temp7, UNKNOWN_NONZERO_PATTERN);
+
+    // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+    // MatView(temp7, PETSC_VIEWER_STDOUT_SELF);
+
+    destroy<fw>(LT);
+    destroy<fw>(BST);
+    destroy<fw>(temp1);
+    destroy<fw>(temp2);
+    destroy<fw>(temp3);
+    destroy<fw>(temp4);
+    destroy<fw>(temp5);
+    destroy<fw>(temp6);
+    destroy<fw>(temp7);
+
+  }
+  else {
+
+    petsc_matrix LT, BST, temp1, temp2, temp3, temp4, temp5, temp6, 
+      temp7, temp8;
+
+    MatTranspose(L, MAT_INITIAL_MATRIX, &LT);
+    MatTranspose(BS, MAT_INITIAL_MATRIX, &BST);
+    finalize<fw>(LT);
+    finalize<fw>(BST);
+
+    // H_x * LN' * LN * BS_y
+    MatMatMult(H, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp1);
+    finalize<fw>(temp1);
+    MatMatMult(temp1, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
+    finalize<fw>(temp2);
+    MatMatMult(temp2, BS, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp3);
+    finalize<fw>(temp3);
+    MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
+
+    PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+    MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
+
+    // -1/τ * H_x * BS_y' * LN' * LN * BS_y 
+    MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
+      nullptr, &temp4);
+    finalize<fw>(temp4);
+    MatAXPY(temp4, 1. / sbp.τ, H, UNKNOWN_NONZERO_PATTERN);
+    MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
+    finalize<fw>(temp5);
+    MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);
+    finalize<fw>(temp6);
+    MatMatMult(temp6, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp7);
+    finalize<fw>(temp7);
+    MatMatMult(temp7, BS, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp8);
+    finalize<fw>(temp8);
+    MatAXPY(M, -1., temp8, UNKNOWN_NONZERO_PATTERN);
+
+    destroy<fw>(LT);
+    destroy<fw>(BST);
+    destroy<fw>(temp1);
+    destroy<fw>(temp2);
+    destroy<fw>(temp3);
+    destroy<fw>(temp4);
+    destroy<fw>(temp5);
+    destroy<fw>(temp6);
+    destroy<fw>(temp7);
+    destroy<fw>(temp8);
+
+  }
+}
 
 
 
