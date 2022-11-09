@@ -198,10 +198,10 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
         FT_symbols[interface - 1][col] = s;
       }
       else if (interface != 0 and row == col - 3) {  
-        F_symbols[row][interface - 1] = w;
-        F_symbols[col][interface - 1] = e;
-        FT_symbols[interface - 1][row] = w;
-        FT_symbols[interface - 1][col] = e;
+        F_symbols[row][interface - 1] = e;
+        F_symbols[col][interface - 1] = w;
+        FT_symbols[interface - 1][row] = e;
+        FT_symbols[interface - 1][col] = w;
       }
     }
   }
@@ -244,82 +244,35 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   auto M = std::vector<petsc_matrix>(sbp.n_blocks);
 
-  sbp_sat::x2::make_M(M[0], sbp, {1, 1, 1, 2});
+  // hard code for now
+  sbp_sat::x2::make_M(M[0], sbp, {1, 1, 2, 1});
+  sbp_sat::x2::make_M(M[1], sbp, {1, 1, 1, 1});
+  sbp_sat::x2::make_M(M[2], sbp, {1, 1, 1, 2});
+  sbp_sat::x2::make_M(M[3], sbp, {1, 1, 2, 1});
+  sbp_sat::x2::make_M(M[4], sbp, {1, 1, 1, 1});
+  sbp_sat::x2::make_M(M[5], sbp, {1, 1, 1, 2});
+  sbp_sat::x2::make_M(M[6], sbp, {1, 1, 2, 1});
+  sbp_sat::x2::make_M(M[7], sbp, {1, 1, 1, 1});
+  sbp_sat::x2::make_M(M[8], sbp, {1, 1, 1, 2});
 
-  // - H_tilde*(D2_x + D2_y)
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // MatView(M[0], PETSC_VIEWER_STDOUT_SELF);
 
-  
+  // Make direct solvers
+  auto solvers = std::vector<KSP>(M.size());
+  for (std::size_t i = 0; i != M.size(); ++i) {
+    solvers[i] = KSP();
+    KSPCreate(PETSC_COMM_SELF, &solvers[i]); 
+    KSPSetOperators(solvers[i], M[i], M[i]);
+  }
 
-  // for (std::size_t block = 0; block < sbp.n_blocks; ++block) {
-  //   MatCopy(Mat A, M[block], DIFFERENT_NONZERO_PATTERN);
-  // }
-
-  exit(-1);
-  // std::size_t g_size = n_blocks * n_interfaces;
-
-  // F components are stored as vectors because we compute
-  // M^-1 F by solving every row for each component. 
+  // Make F components
+  // (stored as vectors because we compute M^-1 F by solving every row 
+  //  for each component.) 
   auto f = std::vector<std::vector<petsc_vector>>(
     4, std::vector<petsc_vector>(n_blocks));  
   auto F = std::vector<petsc_matrix>(4);  
   make_F(sbp, F, f);
-
-  auto m = std::vector<petsc_matrix>(n_blocks);
-
-
-
-  std::size_t bw, be, bn, bs;
-  std::cout << local_problems << " local problems." << std::endl;
-  for (std::size_t row = 0; row != blocks.size(); ++row) {
-    for (std::size_t col = 0; col != blocks.size(); ++col) {
-
-      auto matrix_index = blocks.size() * row + col;
-
-      auto [row_x1, col_x1] = blocks[row];
-      auto [row_x2, col_x2] = blocks[col]; 
-
-      (void) col_x1; (void) row_x2; // unused
-
-      bw = neumann;
-      be = neumann;
-      bn = col == 0                 ? dirichlet : neumann;
-      bs = col == blocks.size() - 1 ? dirichlet : neumann;
-
-      x2::write_m(m[matrix_index], blocks[row], blocks[col], {bw, be, bn, bs});
-
-      auto m_index = (row * blocks.size()) + col + 1;
-      auto ordinal = 
-        m_index == 1 ? "st" : 
-        m_index == 2 ? "nd" : 
-        m_index == 3 ? "rd" : "th";
-
-      std::cout << "Assembled " << m_index << ordinal << " M block (" 
-        << row << ", " << col << ")" << std::endl;
-
-    }
-  }
-
-  // MatView(m[n_blocks - 1], PETSC_VIEWER_STDOUT_SELF);
-  
-  
-  std::cout << m.size() << " = m size " << std::endl;
-
-
-  MatView(m[0], PETSC_VIEWER_STDOUT_SELF);
-
-  exit(-1);
-  
-  auto solvers = std::vector<KSP>(m.size());
-  // KSP solvers[9];
-  for (std::size_t i = 0; i != m.size(); ++i) {
-    solvers[i] = KSP();
-    KSPCreate(PETSC_COMM_SELF, &solvers[i]); 
-    KSPSetOperators(solvers[i], m[i], m[i]);
-    // KSPSetUp(solvers[i]);
-    int msz, nsz;
-    MatGetSize(m[i], &msz, &nsz); std::cout 
-    << "m size " << msz << ",  " << nsz << std::endl;
-  }
 
   // Compute M^-1 F
   auto MF = std::vector<std::vector<petsc_vector>>(
@@ -331,14 +284,13 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
     }
   } 
 
+  compute_mf(MF, solvers, f);
+
   // MF {M0 FW, M0 FE, M0 FS, M0 MN, M1 FW, ..., MN FN}
 
   petsc_matrix D;
   make_D(D, sbp, interfaces);
-
-  // MatView(D, PETSC_VIEWER_STDOUT_SELF);
-
-  compute_mf(MF, solvers, f);
+  
 
   int vn = sbp.n * sbp.n;
   auto vi = std::vector<int>(sbp.n * sbp.n);
@@ -352,14 +304,17 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   for (std::size_t i = 0; i < sbp.n_blocks; ++i) {
     for (std::size_t j = 0; j < sbp.n_interfaces; ++j) {
       if (F_symbols[i][j] > 0) {
+
+        std::size_t index = (i * 4) + F_symbols[i][j] - 1;
+        std::size_t ii = i * sbp.n * sbp.n;
+        std::size_t jj = j * sbp.n;
+        
+        std::cout << "retrieving M[" << i << "] and F[" 
+          << F_symbols[i][j] << "] at index " << index << std::endl;
+
         for (std::size_t k = 0; k < sbp.n; ++k) {
-          std::size_t index = (k * i) + F_symbols[i][j] - 1;
-          std::size_t ii = i * sbp.n * sbp.n;
-          std::size_t jj = j * sbp.n;
-          // gMF[index][k]
           VecGetValues(MF[index][k], vn, &vi[0], &vy[0]);
           for (std::size_t l = 0; l < sbp.n * sbp.n; ++l) {
-            std::cout << ii + l << ", " << jj + k << std::endl;
             MatSetValue(gMF, ii + l, jj + k, vy[l], ADD_VALUES);
           }
         }
@@ -370,6 +325,8 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   finalize<fw>(gMF);
   PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   MatView(gMF, PETSC_VIEWER_STDOUT_SELF);
+
+  exit(-1);
 
   auto FTMF = vv<petsc_matrix>(n_interfaces,
     std::vector<petsc_matrix>(n_interfaces));
@@ -400,7 +357,7 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   std::cout << "end." << std::endl;
   for (std::size_t i = 0; i != 9; ++i) KSPDestroy(&solvers[i]);
-  for (auto &e : m)  destroy<fw>(e);
+  for (auto &e : M)  destroy<fw>(e);
 
     destroy<fw>(D);
 
@@ -646,13 +603,13 @@ void sbp_sat::x2::make_F(
   std::vector<std::vector<petsc_vector>> &f) {
 
   // (-τ * LN + β * LN* BS_y) * H_x 
-  fcompop(F[2], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  fcompop(F[3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
   // (-τ * LS + β * LS* BS_x) * H_x 
-  fcompop(F[3], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+  fcompop(F[2], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
   // (-τ * LE + β * LE* BS_y) * H_y 
-  fcompop(F[0], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  fcompop(F[1], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
   // (-τ * LW + β * LW* BS_y) * H_y 
-  fcompop(F[1], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  fcompop(F[0], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
 
   int ncols;
   int const *cols;
@@ -664,8 +621,6 @@ void sbp_sat::x2::make_F(
   f[3] = std::vector<petsc_vector>(sbp.n);
 
   PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-  MatView(F[2], PETSC_VIEWER_STDOUT_SELF);
-  MatView(F[3], PETSC_VIEWER_STDOUT_SELF);
 
   for (std::size_t i = 0; i != sbp.n; ++i) {
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[0][i]);
@@ -744,13 +699,13 @@ void sbp_sat::x2::compute_mf(
   vv<petsc_vector> const &f) {
 
   std::size_t index = 0;
-  for (std::size_t i = 0; i != m.size(); ++i) { //  -------- n blocks
-    for (std::size_t j = 0; j != f.size(); ++j) { // ------- 4
-      for (std::size_t k = 0; k != f[j].size(); ++k) { // -- n blocks
-        std::cout << "solve with block " << i << " on "
-          << " f slice " << j << ", " << k << " into x index " 
-          << index << ", " << k << std::endl;
-        KSPSolve(m[i], f[j][k], x[index][k]);
+  for (std::size_t block_index = 0; block_index != m.size(); ++block_index) { //  -------- n blocks
+    for (std::size_t f_index = 0; f_index != f.size(); ++f_index) { // ------- 4
+      for (std::size_t slice_index = 0; slice_index != f[f_index].size(); ++slice_index) { // -- n blocks
+        std::cout << "solve with block " << block_index << " on "
+          << " f " << f_index << " slice " << slice_index << " into x index " 
+          << index << ", " << slice_index << std::endl;
+        KSPSolve(m[block_index], f[f_index][slice_index], x[index][slice_index]);
       }
       index += 1;
     }
@@ -837,9 +792,6 @@ void sbp_sat::x2::make_M(
   make_M_boundary(M, sbp, 4, boundary[3]);
 
   finalize<fw>(M);
-
-  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-  MatView(M, PETSC_VIEWER_STDOUT_SELF);
 }
 
 void sbp_sat::x2::make_M_boundary(
@@ -923,8 +875,8 @@ void sbp_sat::x2::make_M_boundary(
     finalize<fw>(temp3);
     MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
 
-    PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-    MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
+    // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+    // MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
 
     // -1/τ * H_x * BS_y' * LN' * LN * BS_y 
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
