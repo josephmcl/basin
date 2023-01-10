@@ -186,9 +186,12 @@ void main_2d() {
     std::make_tuple(0., 1.)};
 
   auto gw = [](long double x){return std::sin(x);};
-  auto ge = [](long double x){return -std::sin(x);};
-  auto gn = [](long double x){return -π * std::cos(π * x);};
+  auto ge = [](long double x){return -std::sin(x + π);};
+  auto gn = [](long double x){return -π * std::cos(x);};
   auto gs = [](long double x){return -π * std::cos(π * x);};
+
+  auto u_xx = [](long double x, long double y) {
+    return -π * π * sin(π * x + π * y);};
 
   boundary_vx2 g = {{
     std::make_tuple(range_t(0, 1./3., bsz) | gw, 1),
