@@ -315,6 +315,17 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   // λb = -FT * M \ g 
   compute_λb(λb, F, Mg, FT_symbols, sbp);
 
+  petsc_vector λ;
+  // initialize_λ(λ, sbp);
+  VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &λ); 
+  
+  // compute_λ(λ, λA, λb);
+  KSP trace_solver;
+  KSPCreate(PETSC_COMM_SELF, &trace_solver); 
+  KSPSetOperators(trace_solver, λA, λA);
+  KSPSolve(trace_solver, λb, λ);
+
+  VecView(λ, PETSC_VIEWER_STDOUT_SELF); 
   logging::out << "exit..." << std::endl;
   exit(-1);
 
@@ -644,7 +655,7 @@ void sbp_sat::x2::make_M_boundary(
     finalize<fw>(temp3);
     MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
 
-    // -β*H_y*BS_x'*LW'*LW
+    // -β*H_y*BS_x'*LW'*LW 
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);

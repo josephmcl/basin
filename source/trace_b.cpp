@@ -296,34 +296,70 @@ void sbp_sat::x2::compute_λb(
   vv<std::size_t>  const &FT_symbols,
   components       const &sbp) {
 
+
+  int inst = 0;
+
   std::size_t findex;
-  auto v = std::vector<double>(sbp.n * sbp.n);
-  auto u = std::vector<int>(sbp.n * sbp.n);
+  auto v = std::vector<double>(sbp.n);
+  auto read_indices = std::vector<int>(sbp.n);
+  for (std::size_t i = 0; i != read_indices.size(); ++i) 
+      read_indices[i] = i;
+  auto write_indices = std::vector<int>(sbp.n);
+  petsc_vector temp, n1; 
+  VecCreateSeq(PETSC_COMM_SELF, sbp.n, &temp);
+  VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &n1); 
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
 
     // Update indices based on the super index
-    for (std::size_t j = 0; j != u.size(); ++j) 
-      u[i] = i * sbp.n + j;
+    for (std::size_t j = 0; j != write_indices.size(); ++j) 
+      write_indices[j] = (i * sbp.n) + j;
 
     for (std::size_t j = 0; j != sbp.n_blocks; ++j) {
 
-      findex = FT_symbols[i][j] - 1;
+      findex = FT_symbols[i][j];
       if (findex != 0) {
-        for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
-          std::cout << "compute vtv " << ii << " " << j << std::endl;
-          VecView(F[findex][ii], PETSC_VIEWER_STDOUT_SELF);
-          VecView(Mg[j], PETSC_VIEWER_STDOUT_SELF);
-          VecTDot(F[findex][ii], Mg[j], &v[ii]);
-        }
-        VecSetValues(λb, sbp.n * sbp.n, &u[0], &v[0], ADD_VALUES); 
+
+        findex--;
+
+        inst++;
+        std::cout << inst << " writing to " << i << ", (" << j << "), " << 
+          findex << 
+
+        std::endl;
+
+
+
+        //PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_INFO);
+        //MatView(F[findex], PETSC_VIEWER_STDOUT_SELF);
+        // VecView(Mg[j], PETSC_VIEWER_STDOUT_SELF);
+        //VecView(temp, PETSC_VIEWER_STDOUT_SELF);
+        MatMult(F[findex], Mg[j], temp);
+
+        VecGetValues(temp, sbp.n, &read_indices[0], &v[0]);
+        // VecAXPY(λb, 1., temp);
+
+        // for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+        //   std::cout << "compute vtv " << ii << " " << j << std::endl;
+          // VecView(F[findex][ii], PETSC_VIEWER_STDOUT_SELF);
+          // VecView(Mg[j], PETSC_VIEWER_STDOUT_SELF);
+        //  VecTDot(F[findex][ii], Mg[j], &v[ii]);
+        // }
+        VecSetValues(n1, sbp.n, &write_indices[0], &v[0], ADD_VALUES); 
       }
     }
   }
 
+  // note: for some reason the block indices 0 and 2 on the solution are 
+  //       way worse than the rest of the solution. unsure why. maybe 
+  //       fix later. 
+  
+  VecAXPY(λb, -1., n1); // delta g is not used right now so just negate
   std::cout << "computed λb" << std::endl;
 
   finalize<fw>(λb);
-  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   VecView(λb, PETSC_VIEWER_STDOUT_SELF);
+  destroy<fw>(temp);
+  destroy<fw>(n1);
 
 }
