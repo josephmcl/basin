@@ -268,6 +268,9 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   auto F = std::vector<petsc_matrix>(4);  
   make_F(sbp, F, f);
 
+  petsc_matrix F_explicit;
+  make_F_explicit(F_explicit, f, F_symbols, sbp); 
+
   auto MF = vv<petsc_vector>(4 * sbp.n_blocks, 
             std::vector<petsc_vector>(sbp.n)); 
   initialize_MF(MF, sbp);
@@ -325,7 +328,10 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   KSPSetOperators(trace_solver, λA, λA);
   KSPSolve(trace_solver, λb, λ);
 
-  VecView(λ, PETSC_VIEWER_STDOUT_SELF); 
+  // Compute the solution 
+  // solution = M \ (g - F * lambda)
+  // num_sol = M\(g_bar - F*lambda)
+
   logging::out << "exit..." << std::endl;
   exit(-1);
 
@@ -591,6 +597,60 @@ void sbp_sat::x2::make_F(
     VecSetValues(f[3][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[3][i]);
   }
+}
+
+void sbp_sat::x2::make_F_explicit(
+  petsc_matrix           &F_explicit, 
+  vv<petsc_vector> const &f,
+  vv<std::size_t>  const &F_symbols,  
+  components       const &sbp
+  ) {
+
+  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, 
+    sbp.n * sbp.n_interfaces, sbp.n * sbp.n_interfaces, nullptr, &F_explicit);
+
+
+  std::vector<int> rowi, ind; 
+  std::vector<double> val; 
+  std::size_t fi; int coli;
+  rowi.resize(sbp.n * sbp.n);
+  ind.resize(sbp.n * sbp.n);
+  val.resize(sbp.n * sbp.n);
+
+  for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+    ind[i] = static_cast<int>(i);
+  }
+
+  for (std::size_t row = 0; row != sbp.n_blocks; ++row) {
+
+    for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+      rowi[i] = row * sbp.n * sbp.n + i;
+    }
+
+    for (std::size_t col = 0; col != sbp.n_interfaces; ++col) {
+    
+      fi = F_symbols[row][col]; // Select interface from symbols
+      if (fi != 0) {
+
+        fi--;
+
+        for (std::size_t i = 0; i != sbp.n; ++i) {  
+
+          coli = col * sbp.n + i;
+          VecGetValues(f[fi][i], sbp.n * sbp.n, &ind[0], &val[0]);
+
+          MatSetValues(F_explicit, sbp.n * sbp.n, &rowi[0], 1, &coli, &val[0], 
+            INSERT_VALUES);
+        }
+      }
+    }
+  }
+
+  finalize<fw>(F_explicit);
+
+  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  MatView(F_explicit, PETSC_VIEWER_STDOUT_SELF);
+
 }
 
 void sbp_sat::x2::make_M(
