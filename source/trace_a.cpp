@@ -6,6 +6,9 @@
    Requires known M, F, SBP-SAT components, and interfaces matrix.
 */
 
+#include <iostream>
+#include <chrono>
+
 // Top level solver for D - FT * M \ F 
 void sbp_sat::x2::compute_λA_localized(
 	petsc_matrix                    &        λA,
@@ -144,21 +147,75 @@ void sbp_sat::x2::print_MF(
   MatView(gMF, PETSC_VIEWER_STDOUT_SELF);
 }
 
+// Given a vector of matrices M, and a 2-D vector of vectors F, solve 
+// Mi x = Fi for all Mi in M and Fi in F. Store the result in X, aligned
+// M-index major and F-index minor. 
 void sbp_sat::x2::compute_MF(
   vv<petsc_vector>       &x,
   std::vector<KSP> const &m,
   vv<petsc_vector> const &f) {
 
-  std::size_t index = 0;
+  #pragma omp parallel for num_threads(4) private(m)
+  for (std::size_t block_index = 0; block_index != m.size(); ++block_index) {
+    for (std::size_t i = 0; i != f.size() * f[0].size(); ++i) {
+      std::size_t factor_index = i / f[0].size();
+      std::size_t slice_index = i - (factor_index * f[0].size()); 
+      std::size_t x_index = factor_index + (block_index * f.size());
+      KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
+    }
+  }
+
+  /* NOTE: A fully unrolled loop won't work! Because KSPs are not thread
+           safe.
+
+  for (std::size_t index = 0; index != limit; ++index) {
+  	
+    std::size_t block_index = index / (f.size() * f[0].size());
+  	std::size_t factor_index = (index % (f.size() * f[0].size())) / f[0].size();
+    std::size_t slice_index = (index % (f.size() * f[0].size())) - (factor_index * f[0].size()); 
+    std::size_t x_index = factor_index + (block_index * f.size());
+
+    KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
+  }
+  */ 
+
+  /*
+  auto start = std::chrono::steady_clock::now();
+  // #pragma omp parallel for num_threads(4) private(m)
+
+  std::size_t test = 0;
   for (std::size_t block_index = 0; block_index != m.size(); ++block_index) { //  -------- n blocks
     for (std::size_t f_index = 0; f_index != f.size(); ++f_index) { // ------- 4
       for (std::size_t slice_index = 0; slice_index != f[f_index].size(); ++slice_index) { // -- n blocks
+      	std::size_t index = (f_index) + (block_index * f.size());
+        // std::cout << indez << " " << index << std::endl;
         // std::cout << "solve with block " << block_index << " on "
         //   << " f " << f_index << " slice " << slice_index << " into x index " 
         //   << index << ", " << slice_index << std::endl;
         KSPSolve(m[block_index], f[f_index][slice_index], x[index][slice_index]);
       }
-      index += 1;
+      // indez += 1;
+    }
+  }
+  auto end = std::chrono::steady_clock::now();
+  std::chrono::duration<double> diff = end-start;
+  std::cout << "The interval is " << diff.count() << "\n";
+  */
+
+}
+
+
+void sbp_sat::x2::compute_MF_sliced(
+  std::vector<petsc_vector>       &MF_sliced, 
+  std::vector<KSP>          const &explicit_solvers, 
+  std::vector<petsc_vector> const &F_sliced) {
+
+  #pragma omp parallel for num_threads(4) private(F_sliced)
+  for (std::size_t i = 0; i != explicit_solvers.size(); ++i) {
+    for (std::size_t j = 0; j != F_sliced.size(); ++j) { 
+      if (j % explicit_solvers.size() == i) {
+        KSPSolve(explicit_solvers[i], F_sliced[j], MF_sliced[j]);
+      }
     }
   }
 }

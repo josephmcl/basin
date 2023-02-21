@@ -48,7 +48,7 @@ void sbp_sat::x2::compute_boundary_solution(
         for (std::size_t j = 0; j != ranges.size(); ++j) {
             auto range = ranges[j];            
 
-            std::cout << range.size() << std::endl;
+            // std::cout << range.size() << std::endl;
 
             
             VecCreateSeq(PETSC_COMM_SELF, range.size(), &g[i][j]);
@@ -262,7 +262,6 @@ void sbp_sat::x2::compute_Mg(
     std::vector<KSP>          const &M,
     std::vector<petsc_vector> const &g) {
 
-    VecView(g[0], PETSC_VIEWER_STDOUT_SELF);
     for (std::size_t i = 0; i != M.size(); ++i) {
         KSPSolve(M[i], g[i], Mg[i]);
     }

@@ -8,6 +8,7 @@
 #include <array>
 #include <optional>
 #include <functional>
+#include <iomanip>
 
 #include "definitions.h"
 #include "ranges.h"
@@ -15,9 +16,12 @@
 #include "solve.h"
 
 #include "linalg.h"
-
 #include "components.h"
+#include "connect.h"
 
+#include "logging.h"
+
+#include "omp.h"
 
 /* petsc headers */
 #include "petscsys.h"
@@ -451,6 +455,12 @@ void add_boundary(
   MatCompositeAddMat(M, result);
 }
 
+void compute_solution(
+  std::vector<petsc_vector>       &x,
+  std::vector<KSP>          const &A, 
+  petsc_vector              const &b, 
+  components                const &sbp);
+
 void solve(
   KSP &A, 
   std::vector<petsc_vector> &b, 
@@ -461,6 +471,22 @@ void make_F(
   std::vector<petsc_matrix> &F,
   vv<petsc_vector> &f);
 
+void make_F_explicit(
+  petsc_matrix           &F_explicit, 
+  vv<petsc_vector> const &f,
+  vv<std::size_t>  const &F_symbols,  
+  components       const &sbp);
+
+void make_F_sliced(
+  std::vector<petsc_vector>       &F_sliced, 
+  petsc_matrix              const &F_explicit,  
+  components                const &sbp);
+
+void make_explicit_solvers(
+  std::vector<KSP>                &solvers,
+  std::vector<petsc_matrix> const &M,
+  components const &sbp);
+
 void fcompop(
   petsc_matrix &f, 
   petsc_matrix const &l, 
@@ -469,12 +495,57 @@ void fcompop(
   real_t       const τ, 
   real_t       const β);
 
-void compute_mf(
+void make_scaled_vec(
+  petsc_vector &v, 
+  std::size_t   n,
+  real_t        s = 1.);
+
+// Definitions located in trace_a.cpp. These include functions exclusive  
+// to computing λA = D - FT * M \ F 
+
+// Top-level functions
+void compute_λA_localized(
+  petsc_matrix                    &        λA,
+  std::vector<KSP>          const &         M, 
+  vv<petsc_vector>          const &         F,
+  vv<std::size_t>           const &FT_symbols, 
+  vv<std::size_t>           const & F_symbols, 
+  vv<std::size_t>           const &interfaces, 
+  components                const &       sbp);
+
+// D Matrix functions
+void compute_D(
+  petsc_matrix          &D, 
+  components      const &sbp, 
+  vv<std::size_t> const &interfaces);
+
+
+
+// M^-1 * F functions 
+void compute_MF(
   vv<petsc_vector>       &x,
   std::vector<KSP> const &m,
   vv<petsc_vector> const &f);
 
-void compute_ftmf(
+void initialize_MF(
+  vv<petsc_vector>       &MF, 
+  components       const &sbp);
+
+void destroy_MF(
+  vv<petsc_vector> &MF);
+
+void compute_MF_sliced(
+  std::vector<petsc_vector>       &MF_sliced, 
+  std::vector<KSP>          const &explicit_solvers, 
+  std::vector<petsc_vector> const &F_sliced); 
+
+void print_MF(
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t> const &F_symbols, 
+  components const &sbp);
+
+// F^T * M^-1 * F functions
+void compute_FTMF(
   vv<petsc_matrix>       &FTMF, 
   vv<petsc_vector> const &F, 
   vv<petsc_vector> const &MF, 
@@ -482,16 +553,102 @@ void compute_ftmf(
   vv<std::size_t>  const &FT_symbols,
   components       const &sbp);
 
-void ftmfcompop(
+void ftmfcompop( // kernel used in compute_FTMF ie. (F^T) * (M^-1 F) 
   petsc_matrix                    &FTMF, 
   std::vector<petsc_vector> const &F, 
   std::vector<petsc_vector> const &MF);
 
-// Make the D sub-matrix of the hybrid formulation. 
-void make_D(
-  petsc_matrix          &D, 
-  components      const &sbp, 
-  vv<std::size_t> const &interfaces);
+void print_FTMF(
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp);
+
+void compute_λA( 
+  petsc_matrix           &λA, 
+  petsc_matrix     const &D, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp); 
+
+void initialize_λA(
+  petsc_matrix     &λA, 
+  components const &sbp);
+
+// trace_b.cpp function 
+
+void compute_sources(
+    std::vector<petsc_matrix>             &F, 
+    std::vector<range_t>            const &space,
+    std::function<real_t(real_t, real_t)> const  f);
+
+using boundary_functions = std::vector<
+    std::function<real_t(real_t, real_t)>>;
+using boundary_vectors = std::array<real_t, 4>;
+
+void compute_boundary_solution(
+    vv<petsc_vector>            &g, 
+    std::vector<range_t>  const &grids,
+    boundary_functions    const  bf, 
+    boundary_vectors      const  b);
+
+void compute_B(
+    std::vector<petsc_matrix>       &  B, 
+    components                const &sbp);
+
+void compute_b1(
+    petsc_matrix       & B, 
+    petsc_matrix const & H, 
+    real_t       const   τ, 
+    petsc_matrix const & L, 
+    real_t       const   β, 
+    petsc_matrix const &BS,
+    std::size_t  const   n);
+
+void compute_b2(
+    petsc_matrix       & B, 
+    petsc_matrix const & H, 
+    real_t       const   τ, 
+    petsc_matrix const & L, 
+    real_t       const   β, 
+    petsc_matrix const &BS,
+    std::size_t  const   n);
+
+void compute_g(
+    std::vector<petsc_vector>       &g, 
+    std::vector<petsc_matrix> const &boundaries,
+    vv<petsc_vector>          const &solutions,
+    std::vector<petsc_matrix> const &sources, 
+    vv<std::size_t>           const &boundary_type_map,
+    vv<std::size_t>           const &boundary_data_map,
+    components                const &sbp);
+
+void compute_Mg(
+  std::vector<petsc_vector>       &x,
+  std::vector<KSP>          const &M,
+  std::vector<petsc_vector> const &g);
+
+void initialize_Mg(
+  std::vector<petsc_vector>       &Mg, 
+  components                const &sbp);
+
+void destroy_Mg(
+  std::vector<petsc_vector> &Mg);
+
+void initialize_λb( 
+  petsc_vector           &λb,
+  components       const &sbp);
+
+void compute_λb( 
+  petsc_vector           &λb, 
+  std::vector<petsc_matrix> const &F, 
+  std::vector<petsc_vector> const &Mg, 
+  vv<std::size_t>  const &F_symbols,
+  components       const &sbp);
+
 
 void make_M(
   petsc_matrix &M,
@@ -503,6 +660,12 @@ void make_M_boundary(
   components const &sbp, 
   std::size_t const direction,
   std::size_t const boundary);
+
+void initialize_symbols(
+  vv<std::size_t> &F_Symbols,
+  vv<std::size_t> &FT_Symbols, 
+  vv<std::size_t> const &interfaces,
+  components const &sbp);
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

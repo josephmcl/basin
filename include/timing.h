@@ -1,7 +1,10 @@
 #pragma once
+
 #include <cstdint>
 #include <string>
 #include <iostream>
+#include <chrono>
+#include <thread>
 
 namespace timing {
 	
@@ -64,7 +67,7 @@ namespace timing {
 
     void init(void) {
         auto start = read();
-        sleep(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
         auto stop = read();
         tsc_timer_ticks_per_second = static_cast<double>(
             stop.value - start.value);

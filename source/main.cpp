@@ -21,9 +21,10 @@
 
 #include "solve.h"
 #include "poisson.h"
-#include "hybrid_sbp_sat_2d.h"
 
-#include "timing.h"
+// #include "timing.h"
+
+#include "hybrid_sbp_sat_2d.h"
 
 void poisson_1d_convergence_test(
   std::size_t volume_points, 
@@ -77,10 +78,10 @@ void poisson_1d_convergence_test(
     poisson1d::analytical_blocked(exact, volume_points, blocks);
 
     std::vector<type::real_t> result;
-    auto begin = timing::read();
+    // auto begin = timing::read();
     poisson1d::petsc_problem(result, volume_points, blocks);
-    auto end = timing::read();
-    auto secs = begin - end;
+    // auto end = timing::read();
+    // auto secs = begin - end;
 
     long double error = 0;
     long double temp;
@@ -94,8 +95,8 @@ void poisson_1d_convergence_test(
     std::cout << std::setw(13) 
       << exact.size() << " | " << error << " | ";
     if (prior_error) {
-      std::cout << *prior_error / error << " | " 
-        << std::log2(*prior_error / error) - 2. << " | " << secs;
+      //std::cout << *prior_error / error << " | " 
+      //  << std::log2(*prior_error / error) - 2. << " | " << secs;
     }
     std::cout << std::endl;
 
@@ -132,10 +133,10 @@ void poisson_1d_hybrid_convergence_test(
     poisson1d::analytical_blocked(exact, volume_points, blocks);
 
     std::vector<type::real_t> result;
-    auto begin = timing::read();
+    //auto begin = timing::read();
     poisson1d::petsc_hybridized_problem(result, volume_points, blocks);
-    auto end = timing::read();
-    auto secs = end - begin;
+    //auto end = timing::read();
+    // auto secs = end - begin;
 
     long double error = 0;
     long double temp;
@@ -153,7 +154,7 @@ void poisson_1d_hybrid_convergence_test(
       std::cout << *prior_error / error << " | " 
         << std::log2(*prior_error / error)  << " | ";
       std::cout << std::setprecision(4) << std::fixed;
-      std::cout << secs;
+      // std::cout << secs;
     }
     std::cout << std::endl;
 
@@ -167,19 +168,24 @@ void main_2d() {
   
   using namespace sbp_sat;
 
-  nat_t bsz = 4;
+  nat_t bsz = 30;
   real_v u = {};
 
   block_v b = { 
     std::make_tuple(
-      range_t(0,     1./3., bsz), 
+      range_t(0,     1./4., bsz), 
       range_t(0,     1./3., bsz)),
     std::make_tuple(
       range_t(1./3., 2./3., bsz), 
       range_t(1./3., 2./3., bsz)),
     std::make_tuple(
       range_t(2./3., 1,     bsz), 
+      range_t(2./3., 1.,    bsz)),
+    std::make_tuple(
+      range_t(2./3., 1,     bsz), 
       range_t(2./3., 1.,    bsz))};
+
+  //  
 
   domain_v d = {
     std::make_tuple(0., 1.), 
@@ -189,9 +195,6 @@ void main_2d() {
   auto ge = [](long double x){return -std::sin(x + π);};
   auto gn = [](long double x){return -π * std::cos(x);};
   auto gs = [](long double x){return -π * std::cos(π * x);};
-
-  auto u_xx = [](long double x, long double y) {
-    return -π * π * sin(π * x + π * y);};
 
   boundary_vx2 g = {{
     std::make_tuple(range_t(0, 1./3., bsz) | gw, 1),
