@@ -262,6 +262,7 @@ void sbp_sat::x2::compute_Mg(
     std::vector<KSP>          const &M,
     std::vector<petsc_vector> const &g) {
 
+    #pragma omp parallel for num_threads(4) private(M)
     for (std::size_t i = 0; i != M.size(); ++i) {
         KSPSolve(M[i], g[i], Mg[i]);
     }

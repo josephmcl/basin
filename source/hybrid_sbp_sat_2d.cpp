@@ -37,10 +37,7 @@ petsc_poisson(sbp_sat::real_v             &result,
 }
 
 void sbp_sat::x2::
-petsc_hybridized_poisson(sbp_sat::real_v             &result,
-                         sbp_sat::domain_v     const &domain, 
-                         sbp_sat::block_v      const &blocks, 
-                         sbp_sat::boundary_vx2 const &boundaries) {
+petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
 
 
@@ -57,7 +54,7 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   // only for square hybrid systems 
 
-  const std::size_t l_blocks = blocks.size();
+  const std::size_t l_blocks = el_n;
   const std::size_t n_blocks = l_blocks * l_blocks;
 
   /*  Create petsc objects for the block diagonal matrix, M. 
@@ -86,11 +83,9 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
 
 
-  auto [rows, cols] = blocks[0];
-  auto spacing = rows.to - rows.from;
   auto span = 1. / static_cast<double>(l_blocks);
-  auto n_points_x = rows.size();
-  auto n = rows.size();
+  auto n_points_x = vl_n;
+  auto n = vl_n;
 
 
   // Generate ranges for the x and y of each block, given the number of 
@@ -222,13 +217,6 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(B[7], PETSC_VIEWER_STDOUT_SELF);
 
-  // 2: λ_rhs    = gd - FT * M \ g 
-
-
-
-
-
-
   vv<std::size_t> F_symbols(n_blocks, // rows 
     std::vector<std::size_t>(n_interfaces, 0)); // columns
   vv<std::size_t> FT_symbols(n_interfaces, // rows
@@ -310,53 +298,26 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   make_F_explicit(F_explicit, f, F_symbols, sbp); 
   std::cout << "Assembled F explicit." << std::endl;
 
-  /*
-  begin = timing::read();
-  auto explicit_solvers = std::vector<KSP>(4);
-  make_explicit_solvers(explicit_solvers, M, sbp);
-  std::cout << "Assembled explicit M solvers." << std::endl;
 
-  
-
-  // "Sliced" vector of column vectors used to unfactored computation.
-  std::vector<petsc_vector> F_sliced;
-  make_F_sliced(F_sliced, F_explicit, sbp); 
-  end = timing::read();       
-  std::cout << end - begin << "s to assemble unfactored M problem" << std::endl;
-  */
-
+  // Compute solve of MX = F.
   begin = timing::read();
   auto MF = vv<petsc_vector>(4 * sbp.n_blocks, 
             std::vector<petsc_vector>(sbp.n)); 
   initialize_MF(MF, sbp);
   compute_MF(MF, solvers, f);
   end = timing::read();
-  std::cout << end - begin << "s factorized M" << std::endl;
 
-  std::vector<petsc_vector> MF_sliced(sbp.n * sbp.n * sbp.n_blocks); 
-  
-  /*
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed MX = F." << std::endl;
+
+  // Compute D.
   begin = timing::read();
-  for (auto &e: MF_sliced) {
-    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &e);
-  }
-  compute_MF_sliced(MF_sliced, explicit_solvers, F_sliced);
-  end = timing::read();
-
-  std::cout << end - begin << "s plain M" << std::endl;
-  */
-
-  
-
-  // petsc_matrix M_explicit; 
-  // auto MF_explicit = std::vector<petsc_matrix>();
-  // compute_MF_explicit(MF_explicit, solvers, f_explicit;);
-
-  // MF {M0 FW, M0 FE, M0 FS, M0 MN, M1 FW, ..., MN FN}
-  // exit(-1); 
   petsc_matrix D;
   compute_D(D, sbp, interfaces);
+  end = timing::read();
   
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed D." << std::endl;  
   
   // Check that decomposed MF: 
   //   - is numerically correct and 
@@ -376,39 +337,53 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
   compute_ftmf(FTMF, f, MF, F_symbols, FT_symbols, sbp);
   */
 
+  begin = timing::read();
   petsc_matrix λA; 
   initialize_λA(λA, sbp);
   compute_λA(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+  end = timing::read();
 
-  logging::out << "compute Mg..." << std::endl;
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed λA (D - FT * M \\ F)." << std::endl;
 
-  std::cout << g.size() << " " << solvers.size() << std::endl;
-
+  begin = timing::read();
   std::vector<petsc_vector> Mg;
   initialize_Mg(Mg, sbp);
   compute_Mg(Mg, solvers, g);
+  end = timing::read();
 
-  logging::out << "compute ..." << std::endl;
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed Mx = g." << std::endl;
 
+  begin = timing::read();
   petsc_vector λb;
   initialize_λb(λb, sbp); 
   // λb = -FT * M \ g 
   compute_λb(λb, F, Mg, FT_symbols, sbp);
+  end = timing::read();
 
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed λb (gd - FT * M \\ g)." << std::endl;
+
+  begin = timing::read();
   petsc_vector λ;
   // initialize_λ(λ, sbp);
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &λ); 
-  
   // compute_λ(λ, λA, λb);
   KSP trace_solver;
   KSPCreate(PETSC_COMM_SELF, &trace_solver); 
   KSPSetOperators(trace_solver, λA, λA);
   KSPSolve(trace_solver, λb, λ);
+  end = timing::read();
+
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed λ (λA \\ λb)." << std::endl;
 
   // Compute the solution 
   // solution = M \ (g - F * lambda)
   // num_sol = M\(g_bar - F*lambda)
 
+  begin = timing::read();
   petsc_vector b, neg, g_explicit; // b vector is the b λ-conditioned vector 
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &b);
   make_scaled_vec(neg, sbp.n * sbp.n * sbp.n_blocks, 0.);
@@ -428,27 +403,25 @@ petsc_hybridized_poisson(sbp_sat::real_v             &result,
 
   MatMult(F_explicit, λ, b);
   VecAYPX(b, -1., g_explicit);
-
   finalize<fw>(b);
+  end = timing::read();
 
-  // VecView(b, PETSC_VIEWER_STDOUT_SELF);
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed b (g - F * λ)." << std::endl;
 
+  
+  begin = timing::read();
   std::vector<petsc_vector> x;
   compute_solution(x, solvers, b, sbp);
+  end = timing::read();
 
-  // for (auto &e: x) VecView(e, PETSC_VIEWER_STDOUT_SELF);
-
-  logging::out << "exit..." << std::endl;
-  exit(-1);
+  logging::out << std::setw(14) << std::fixed << end - begin << " s # "
+    << "Computed u (M \\ b)." << std::endl;
 
   destroy_MF(MF);
   destroy_Mg(Mg);
   destroy<fw>(λA);
-
   for (auto &e : M) destroy<fw>(e);
-
-
-  logging::out << "end." << std::endl;
 }
 
 // Given b as a single vector and A as a vector of solvers, 
@@ -463,7 +436,7 @@ void sbp_sat::x2::compute_solution(
 
   std::size_t const n2 = sbp.n * sbp.n;
 
-  x.resize(sbp.n_blocks);
+  x.resize(sbp.n_blocks + 1);
   for (auto &xi : x) {
     VecCreateSeq(PETSC_COMM_SELF, n2, &xi);
   }
@@ -483,21 +456,22 @@ void sbp_sat::x2::compute_solution(
   // Read out all b values.
   VecGetArrayRead(b, &val);
 
+  // #pragma omp parallel for num_threads(4)
   for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
+
+    double const *v = val + (n2 * block);
 
     // Write the ith block of b values.
-    VecSetValues(bs[block], n2, &writei[0], val, INSERT_VALUES);
+    VecSetValues(bs[block], n2, &writei[0], v, INSERT_VALUES);
     finalize<fw>(bs[block]);
 
-    // Increment the value pointer.
-    val += n2;
-  }
-
-  for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
-    
+  // #pragma omp parallel for num_threads(4)
     // Solve each block. 
     KSPSolve(solvers[block], bs[block], x[block]); 
+    finalize<fw>(x[block]);
   }
+
+  
 
 }
 

@@ -120,11 +120,7 @@ namespace x2 {
     sbp_sat::block_t      const &block, 
     sbp_sat::boundary_tx2 const &boundaries); 
 
-  void petsc_hybridized_poisson(
-    real_v             &result,
-    domain_v     const &domain, 
-    block_v      const &blocks, 
-    boundary_vx2 const &boundary);
+  void petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n);
 
   void write_m( 
     petsc_matrix       &m,

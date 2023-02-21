@@ -166,66 +166,9 @@ void poisson_1d_hybrid_convergence_test(
 
 void main_2d() {
   
-  using namespace sbp_sat;
 
-  nat_t bsz = 30;
-  real_v u = {};
-
-  block_v b = { 
-    std::make_tuple(
-      range_t(0,     1./4., bsz), 
-      range_t(0,     1./3., bsz)),
-    std::make_tuple(
-      range_t(1./3., 2./3., bsz), 
-      range_t(1./3., 2./3., bsz)),
-    std::make_tuple(
-      range_t(2./3., 1,     bsz), 
-      range_t(2./3., 1.,    bsz)),
-    std::make_tuple(
-      range_t(2./3., 1,     bsz), 
-      range_t(2./3., 1.,    bsz))};
-
-  //  
-
-  domain_v d = {
-    std::make_tuple(0., 1.), 
-    std::make_tuple(0., 1.)};
-
-  auto gw = [](long double x){return std::sin(x);};
-  auto ge = [](long double x){return -std::sin(x + π);};
-  auto gn = [](long double x){return -π * std::cos(x);};
-  auto gs = [](long double x){return -π * std::cos(π * x);};
-
-  boundary_vx2 g = {{
-    std::make_tuple(range_t(0, 1./3., bsz) | gw, 1),
-    std::make_tuple(range_t(0, 1./3., bsz) | ge, 1),
-    std::make_tuple(range_t(0, 1./3., bsz) | gn, 2),
-    std::make_tuple(range_t(0, 1./3., bsz) | gs, 2)
-  }, {
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gw, 1),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | ge, 1),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gn, 2),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gs, 2)      
-  }, {
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gw, 1),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | ge, 1),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gn, 2),
-    std::make_tuple(range_t(1./3., 2./3., bsz) | gs, 2)      
-  }};
-
-  boundary_tx2 gg = {
-    std::make_tuple(range_t(0, 1., bsz) | gw, 1),
-    std::make_tuple(range_t(0, 1., bsz) | ge, 1),
-    std::make_tuple(range_t(0, 1., bsz) | gn, 2),
-    std::make_tuple(range_t(0, 1., bsz) | gs, 2)};
-
-  block_t bb = std::make_tuple(
-    range_t(0, 1., bsz), 
-    range_t(0, 1., bsz));
-
-  // sbp_sat::x2::petsc_poisson(u, d, bb, gg);
-
-  sbp_sat::x2::petsc_hybridized_poisson(u, d, b, g);
+  // sbp_sat::x2::petsc_hybridized_poisson(25, 4);
+  sbp_sat::x2::petsc_hybridized_poisson(10, 10);
 
   
 }

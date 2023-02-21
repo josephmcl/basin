@@ -322,6 +322,8 @@ void sbp_sat::x2::compute_λA(
   std::size_t findex;
   std::size_t mindex;
   // NOTE: j and k are both bound to block indices.
+
+  #pragma omp parallel for num_threads(4) 
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
       for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
