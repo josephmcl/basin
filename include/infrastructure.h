@@ -7,6 +7,6 @@ namespace infrastructure {
         nil                 = 0,
         petsc_init_failure  = 1};
     bool operator !(error e);
-    error initialize();
+    error initialize(int c, char **v);
     void cleanup();
 }

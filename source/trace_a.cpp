@@ -155,12 +155,13 @@ void sbp_sat::x2::compute_MF(
   std::vector<KSP> const &m,
   vv<petsc_vector> const &f) {
 
-  #pragma omp parallel for num_threads(4) private(m)
+  #pragma omp parallel for
   for (std::size_t block_index = 0; block_index != m.size(); ++block_index) {
     for (std::size_t i = 0; i != f.size() * f[0].size(); ++i) {
       std::size_t factor_index = i / f[0].size();
       std::size_t slice_index = i - (factor_index * f[0].size()); 
       std::size_t x_index = factor_index + (block_index * f.size());
+      // #pragma omp critical 
       KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
     }
   }
@@ -210,7 +211,7 @@ void sbp_sat::x2::compute_MF_sliced(
   std::vector<KSP>          const &explicit_solvers, 
   std::vector<petsc_vector> const &F_sliced) {
 
-  #pragma omp parallel for num_threads(4) private(F_sliced)
+  // #pragma omp parallel for num_threads(4) private(F_sliced)
   for (std::size_t i = 0; i != explicit_solvers.size(); ++i) {
     for (std::size_t j = 0; j != F_sliced.size(); ++j) { 
       if (j % explicit_solvers.size() == i) {
@@ -323,7 +324,7 @@ void sbp_sat::x2::compute_λA(
   std::size_t mindex;
   // NOTE: j and k are both bound to block indices.
 
-  #pragma omp parallel for num_threads(4) 
+  #pragma omp parallel for 
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
       for (std::size_t k = 0; k != sbp.n_blocks; ++k) {

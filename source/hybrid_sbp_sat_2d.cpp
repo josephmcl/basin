@@ -270,10 +270,23 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   // Make direct solvers
   begin = timing::read();
   auto solvers = std::vector<KSP>(M.size());
+
+  #pragma omp parallel for 
   for (std::size_t i = 0; i != M.size(); ++i) {
     solvers[i] = KSP();
-    KSPCreate(PETSC_COMM_SELF, &solvers[i]); 
+    KSPCreate(PETSC_COMM_WORLD, &solvers[i]); 
     KSPSetOperators(solvers[i], M[i], M[i]);
+    KSPSetFromOptions(solvers[i]);
+    KSPSetUp(solvers[i]);
+    petsc_vector x, y;
+    VecCreateSeq(PETSC_COMM_WORLD, sbp.n * sbp.n, &x); 
+    VecCreateSeq(PETSC_COMM_WORLD, sbp.n * sbp.n, &y); 
+
+    // Call once to factorize
+    KSPSolve(solvers[i], x, y);
+
+    destroy<fw>(x);
+    destroy<fw>(y);
   }
   end = timing::read();
 
@@ -436,34 +449,55 @@ void sbp_sat::x2::compute_solution(
 
   std::size_t const n2 = sbp.n * sbp.n;
 
-  x.resize(sbp.n_blocks + 1);
-  for (auto &xi : x) {
-    VecCreateSeq(PETSC_COMM_SELF, n2, &xi);
-  }
+  x.resize(sbp.n_blocks);
 
-  double const *val;
   std::vector<int> writei; writei.resize(n2);
-
   for (std::size_t i = 0; i != writei.size(); ++i) {
     writei[i] = i;
   }
 
-  std::vector<petsc_vector> bs; bs.resize(sbp.n_blocks);
-  for (auto &bb : bs) {
-    VecCreateSeq(PETSC_COMM_SELF, n2, &bb);
-  }
+  std::vector<petsc_vector> bs; 
+  bs.resize(sbp.n_blocks);
+
 
   // Read out all b values.
+  double const *val;
   VecGetArrayRead(b, &val);
 
-  // #pragma omp parallel for num_threads(4)
   for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
+    VecCreateSeq(PETSC_COMM_SELF, n2, &bs[block]);
+    VecCreateSeq(PETSC_COMM_SELF, n2, &x[block]);
+  }
 
+  std::vector<std::vector<double>> bs_; bs_.resize(sbp.n_blocks);
+  #pragma omp parallel for
+  for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
     double const *v = val + (n2 * block);
+    // std::cout << v << " " << v + n2 << std::endl;
+    bs_[block].resize(n2);
+    bs_[block].assign(&val[n2 * block], &val[n2 * (block + 1)]);
+    //VecCreateSeq(PETSC_COMM_SELF, n2, &bs[block]);
+    //VecCreateSeq(PETSC_COMM_SELF, n2, &x[block]);
+  }
 
+  #pragma omp parallel for 
+  for (std::size_t block = 0; block != solvers.size(); ++block) {
+
+
+    //VecCreateSeq(PETSC_COMM_SELF, n2, &bs[block]);
+    //VecCreateSeq(PETSC_COMM_SELF, n2, &x[block]);
+    
     // Write the ith block of b values.
-    VecSetValues(bs[block], n2, &writei[0], v, INSERT_VALUES);
+    //double const *v = val + (n2 * block);
+    // std::cout << solvers.size() << std::endl;
+    //std::vector<double> vv(v, v + n2);
+    VecSetValues(bs[block], n2, &writei[0], &bs_[block][0], INSERT_VALUES);
     finalize<fw>(bs[block]);
+
+    //for (std::size_t i = 0; i != n2; ++i) 
+    //  std::cout << vv[i] << " ";
+    //std::cout << std::endl;
+
 
   // #pragma omp parallel for num_threads(4)
     // Solve each block. 
@@ -471,7 +505,7 @@ void sbp_sat::x2::compute_solution(
     finalize<fw>(x[block]);
   }
 
-  
+  // VecView(x[solvers.size() - 1], PETSC_VIEWER_STDOUT_SELF);
 
 }
 

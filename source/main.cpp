@@ -22,6 +22,8 @@
 #include "solve.h"
 #include "poisson.h"
 
+#include "petscsys.h"
+
 // #include "timing.h"
 
 #include "hybrid_sbp_sat_2d.h"
@@ -39,7 +41,7 @@ void main_2d();
 int main (int argc, char *argv[]) {
 
   // Initialize petsc, among other libraries.
-  if (!infrastructure::initialize()) exit(-1);; { 
+  if (!infrastructure::initialize(argc, argv)) exit(-1);; { 
 
     // timing::init();
     // poisson_1d_hybrid_convergence_test(199, 3);
@@ -166,9 +168,13 @@ void poisson_1d_hybrid_convergence_test(
 
 void main_2d() {
   
-
+  // PetscOmpCtrl poc;
+  // PetscOmpCtrlCreate(PETSC_COMM_SELF, 4, &poc);
+  // PetscOmpCtrlOmpRegionOnMasterBegin(poc);
   // sbp_sat::x2::petsc_hybridized_poisson(25, 4);
-  sbp_sat::x2::petsc_hybridized_poisson(10, 10);
+  sbp_sat::x2::petsc_hybridized_poisson(50, 10);
+  // PetscOmpCtrlOmpRegionOnMasterEnd(poc);
+  // PetscOmpCtrlDestroy(&poc);
 
   
 }

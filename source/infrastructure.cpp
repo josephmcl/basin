@@ -5,10 +5,8 @@ bool infrastructure::operator !(infrastructure::error e) {
 }
 
 infrastructure::error
-infrastructure::initialize() {
+infrastructure::initialize(int c, char **v) {
     using namespace infrastructure;
-    int c = 0;
-    char **v = nullptr;
     PetscBool      success;
 
     PetscInitialize(&c, &v, nullptr, nullptr);
