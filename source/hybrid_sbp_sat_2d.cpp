@@ -168,7 +168,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
   sbp.n_blocks = n_blocks;         // additional non sbp-sat info. but  
   sbp.n_interfaces = n_interfaces; // useful to have along. 
-
+  sbp.n_blocks_dim = l_blocks;
   
 
   // Compute flux components used by b. 
@@ -241,6 +241,8 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
 
   auto begin = timing::read();
+  
+  /*
   auto M = std::vector<petsc_matrix>(sbp.n_blocks);
   std::array<std::size_t, 4> v;
   for (std::size_t i = 0; i != sbp.n_blocks; ++i) {
@@ -249,6 +251,12 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     }
     make_M(M[i], sbp, v);
   }
+  */
+
+  auto M = std::vector<petsc_matrix>(3);
+  sbp_sat::x2::make_M(M[0], sbp, {1, 1, 2, 1});
+  sbp_sat::x2::make_M(M[1], sbp, {1, 1, 1, 1});
+  sbp_sat::x2::make_M(M[2], sbp, {1, 1, 1, 2});
   auto end = timing::read();
 
   logging::out << std::setw(14) << std::fixed << end - begin << " s # " 
@@ -271,7 +279,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   begin = timing::read();
   auto solvers = std::vector<KSP>(M.size());
 
-  #pragma omp parallel for 
+  // #pragma omp parallel for 
   for (std::size_t i = 0; i != M.size(); ++i) {
     solvers[i] = KSP();
     KSPCreate(PETSC_COMM_WORLD, &solvers[i]); 
@@ -301,22 +309,24 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   auto f = std::vector<std::vector<petsc_vector>>(
     4, std::vector<petsc_vector>(n_blocks));  
   auto F = std::vector<petsc_matrix>(4);  
-  make_F(sbp, F, f);
+  auto f_data = std::vector<std::vector<double>>();
+  make_F(sbp, F, f, f_data);
   end = timing::read();
 
   logging::out << std::setw(14) << std::fixed << end - begin << " s # "
     << "Assembled decomposed F." << std::endl;
 
-  petsc_matrix F_explicit;
-  make_F_explicit(F_explicit, f, F_symbols, sbp); 
-  std::cout << "Assembled F explicit." << std::endl;
+  // petsc_matrix F_explicit;
+  // ake_F_explicit(F_explicit, f, F_symbols, sbp); 
+  // std::cout << "Assembled F explicit." << std::endl;
 
 
   // Compute solve of MX = F.
   begin = timing::read();
   auto MF = vv<petsc_vector>(4 * sbp.n_blocks, 
             std::vector<petsc_vector>(sbp.n)); 
-  initialize_MF(MF, sbp);
+  // initialize_MF(MF, sbp);
+  initialize_MF_reduced(MF, sbp);
   compute_MF(MF, solvers, f);
   end = timing::read();
 
@@ -353,7 +363,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   begin = timing::read();
   petsc_matrix λA; 
   initialize_λA(λA, sbp);
-  compute_λA(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+  compute_λA_reduced(λA, D, f, MF, F_symbols, FT_symbols, sbp);
   end = timing::read();
 
   logging::out << std::setw(14) << std::fixed << end - begin << " s # "
@@ -386,6 +396,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   KSP trace_solver;
   KSPCreate(PETSC_COMM_SELF, &trace_solver); 
   KSPSetOperators(trace_solver, λA, λA);
+  KSPSetFromOptions(trace_solver);
   KSPSolve(trace_solver, λb, λ);
   end = timing::read();
 
@@ -414,7 +425,42 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     }
   }
 
-  MatMult(F_explicit, λ, b);
+  // MatMult(F_explicit, λ, b);
+
+  //  F is long [     ]
+  //  lambda is short
+  //  b is tall 
+
+  double const *λ_;
+  VecGetArrayRead(λ, &λ_);
+  std::vector<double> λ_data; 
+  std::vector<double> b_data; 
+  λ_data.assign(λ_, λ_ + sbp.n_interfaces * sbp.n);
+  b_data.resize(sbp.n_blocks * sbp.n * sbp.n);
+  std::size_t k, l, m;
+  for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
+    for (std::size_t j = 0; j != sbp.n_blocks * sbp.n * sbp.n; ++j) {
+      
+      k = j / (sbp.n * sbp.n);
+      l = i / sbp.n;
+      m = F_symbols[k][l];
+      if (m > 0) {
+        k = (l * sbp.n * sbp.n) + (j % (sbp.n * sbp.n));
+        // std::cout << k << std::endl;
+        b_data[j] += λ_data[i] * f_data[m - 1][k];
+        // std::cout << k << " " << f_data[m][k] << std::endl;
+        // std::cout << m - 1 << std::endl;
+      }
+    }
+  }
+
+  std::vector<int> wi; 
+  wi.resize(sbp.n * sbp.n * sbp.n_blocks);
+  for (std::size_t i = 0; i != sbp.n_blocks * sbp.n * sbp.n; ++i) {
+    wi[0] = i;
+  }
+  VecSetValues(b, sbp.n * sbp.n * sbp.n_blocks, &wi[0], &b_data[0], INSERT_VALUES);
+
   VecAYPX(b, -1., g_explicit);
   finalize<fw>(b);
   end = timing::read();
@@ -470,7 +516,7 @@ void sbp_sat::x2::compute_solution(
   }
 
   std::vector<std::vector<double>> bs_; bs_.resize(sbp.n_blocks);
-  #pragma omp parallel for
+  // #pragma omp parallel for
   for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
     double const *v = val + (n2 * block);
     // std::cout << v << " " << v + n2 << std::endl;
@@ -480,7 +526,7 @@ void sbp_sat::x2::compute_solution(
     //VecCreateSeq(PETSC_COMM_SELF, n2, &x[block]);
   }
 
-  #pragma omp parallel for 
+  // #pragma omp parallel for 
   for (std::size_t block = 0; block != solvers.size(); ++block) {
 
 
@@ -714,7 +760,8 @@ void sbp_sat::x2::fcompop(
 void sbp_sat::x2::make_F(
   components const &sbp, 
   std::vector<petsc_matrix> &F,
-  std::vector<std::vector<petsc_vector>> &f) {
+  std::vector<std::vector<petsc_vector>> &f,
+  std::vector<std::vector<double>> &f_data) {
 
   // (-τ * LN + β * LN* BS_y) * H_x 
   fcompop(F[3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
@@ -736,26 +783,47 @@ void sbp_sat::x2::make_F(
 
   PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
 
+  f_data.resize(4);
+  for (auto &e: f_data) {
+    e.resize(sbp.n * sbp.n * sbp.n);
+  }
+
   for (std::size_t i = 0; i != sbp.n; ++i) {
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[0][i]);
     MatGetRow(F[0], i, &ncols, &cols, &vals);
     VecSetValues(f[0][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[0][i]);
 
+    for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
+      f_data[0][(i * sbp.n * sbp.n) + j] = vals[j];
+    }
+
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[1][i]);
     MatGetRow(F[1], i, &ncols, &cols, &vals);
     VecSetValues(f[1][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[1][i]);
+
+    for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
+      f_data[1][(i * sbp.n * sbp.n) + j] = vals[j];
+    }
   
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[2][i]);
     MatGetRow(F[2], i, &ncols, &cols, &vals);
     VecSetValues(f[2][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[2][i]);
+
+    for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
+      f_data[1][(i * sbp.n * sbp.n) + j] = vals[j];
+    }
   
     VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n, &f[3][i]);
     MatGetRow(F[3], i, &ncols, &cols, &vals);
     VecSetValues(f[3][i], ncols, cols, vals, ADD_VALUES);
     finalize<fw>(f[3][i]);
+
+    for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
+      f_data[1][(i * sbp.n * sbp.n) + j] = vals[j];
+    }
   }
 }
 

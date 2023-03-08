@@ -98,6 +98,20 @@ void sbp_sat::x2::initialize_MF(
   } 
 }
 
+void sbp_sat::x2::initialize_MF_reduced(
+  vv<petsc_vector>       &MF, 
+  components       const &sbp) {
+
+  for (std::size_t i = 0; i != 4 * 3; ++i) {
+    for (std::size_t j = 0; j != sbp.n; ++j) {
+      VecCreateSeq(
+        PETSC_COMM_SELF, 
+        sbp.n * sbp.n, 
+        &MF[i][j]);
+    }
+  } 
+}
+
 void sbp_sat::x2::destroy_MF(
   vv<petsc_vector> &MF) {
 
@@ -155,7 +169,7 @@ void sbp_sat::x2::compute_MF(
   std::vector<KSP> const &m,
   vv<petsc_vector> const &f) {
 
-  #pragma omp parallel for
+  // #pragma omp parallel for
   for (std::size_t block_index = 0; block_index != m.size(); ++block_index) {
     for (std::size_t i = 0; i != f.size() * f[0].size(); ++i) {
       std::size_t factor_index = i / f[0].size();
@@ -324,7 +338,7 @@ void sbp_sat::x2::compute_λA(
   std::size_t mindex;
   // NOTE: j and k are both bound to block indices.
 
-  #pragma omp parallel for 
+  #pragma omp parallel for private(findex, mindex)
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
       for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
@@ -355,6 +369,86 @@ void sbp_sat::x2::compute_λA(
 
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+}
+
+void sbp_sat::x2::compute_λA_reduced( 
+  petsc_matrix           &λA, 
+  petsc_matrix     const &D, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp) {
+
+  std::size_t findex;
+  std::size_t mindex;
+  // NOTE: j and k are both bound to block indices.
+
+  const std::size_t limit = sbp.n_interfaces * sbp.n_interfaces * sbp.n_blocks;
+  std::size_t i, j, k;
+  
+  // #pragma omp parallel for private(i, j, k, findex, mindex)
+  for (std::size_t index = 0; index != limit; ++index) {
+    i = index / (sbp.n_interfaces * sbp.n_blocks);
+    j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
+    k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
+    if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+      findex = FT_symbols[i][k] - 1;
+      auto r = k % sbp.n_blocks_dim == 0 ? 0 
+             : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+             : 1;
+      mindex = (r * 4) + F_symbols[k][j] - 1;
+      double v;
+      for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+        for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+          v = 0.;
+          VecTDot(F[findex][ii], MF[mindex][jj], &v);
+          MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+        }
+      } 
+    }
+  }
+
+  /*
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+
+        // std::cout << i << " " << j << " " << k << std::endl;
+
+        if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+          findex = FT_symbols[i][k] - 1;
+          auto r = k % sbp.n_blocks_dim == 0 ? 0 
+                 : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+                 : 1;
+          mindex = (r * 4) + F_symbols[k][j] - 1;
+          // std::cout << "Compute GGGG FTMF super-index " << i 
+          //  << ", " << j << " (" << FT_symbols[i][k] << "), (" 
+          //  << F_symbols[k][j] << ")" << std::endl;
+          // std::cout << "given global index " << k << " read local " <<
+          //   "index " << r << std::endl;
+
+          
+          double v;
+          for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+            for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+              v = 0.;
+              VecTDot(F[findex][ii], MF[mindex][jj], &v);
+              MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+            }
+          } 
+          
+
+        }
+      }
+    }
+  }
+  */
+
+  finalize<fw>(λA);
+
+  MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
+
 }
 
 void sbp_sat::x2::initialize_λA(

@@ -54,6 +54,7 @@ namespace sbp_sat {
     real_t τ, β;
 
     std::size_t n_blocks, n_interfaces;
+    std::size_t n_blocks_dim; 
 
     petsc_matrix hl;
     petsc_matrix hx, hy;

@@ -465,7 +465,8 @@ void solve(
 void make_F(
   components const &sbp, 
   std::vector<petsc_matrix> &F,
-  vv<petsc_vector> &f);
+  vv<petsc_vector> &f,
+  std::vector<std::vector<double>> &f_data);
 
 void make_F_explicit(
   petsc_matrix           &F_explicit, 
@@ -527,6 +528,10 @@ void initialize_MF(
   vv<petsc_vector>       &MF, 
   components       const &sbp);
 
+void initialize_MF_reduced(
+  vv<petsc_vector>       &MF, 
+  components       const &sbp);
+
 void destroy_MF(
   vv<petsc_vector> &MF);
 
@@ -562,6 +567,15 @@ void print_FTMF(
   components       const &sbp);
 
 void compute_λA( 
+  petsc_matrix           &λA, 
+  petsc_matrix     const &D, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components       const &sbp); 
+
+void compute_λA_reduced( 
   petsc_matrix           &λA, 
   petsc_matrix     const &D, 
   vv<petsc_vector> const &F, 

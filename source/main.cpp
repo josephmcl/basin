@@ -168,13 +168,8 @@ void poisson_1d_hybrid_convergence_test(
 
 void main_2d() {
   
-  // PetscOmpCtrl poc;
-  // PetscOmpCtrlCreate(PETSC_COMM_SELF, 4, &poc);
-  // PetscOmpCtrlOmpRegionOnMasterBegin(poc);
-  // sbp_sat::x2::petsc_hybridized_poisson(25, 4);
-  sbp_sat::x2::petsc_hybridized_poisson(50, 10);
-  // PetscOmpCtrlOmpRegionOnMasterEnd(poc);
-  // PetscOmpCtrlDestroy(&poc);
+  // 83160 7560 840 280, 3
 
+  sbp_sat::x2::petsc_hybridized_poisson(50, 3);
   
 }
