@@ -136,11 +136,18 @@ void sbp_sat::x2::print_MF(
   MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n_blocks * sbp.n * sbp.n,
     sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n, nullptr, 
     &gMF);
+
+  std::cout << "M^-1xF size: " << MF.size() << " " 
+    << MF[0].size() << std::endl;
+
   for (std::size_t i = 0; i < sbp.n_blocks; ++i) {
     for (std::size_t j = 0; j < sbp.n_interfaces; ++j) {
       if (F_symbols[i][j] > 0) {
 
-        std::size_t index = (i * 4) + F_symbols[i][j] - 1;
+        std::size_t m = i % sbp.n_blocks_dim == 0 ? 0 
+          : i % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+          : 1;
+        std::size_t index = (m * 4) + F_symbols[i][j] - 1;
         std::size_t ii = i * sbp.n * sbp.n;
         std::size_t jj = j * sbp.n;
         
@@ -148,7 +155,9 @@ void sbp_sat::x2::print_MF(
           << F_symbols[i][j] << "] at index " << index << std::endl;
 
         for (std::size_t k = 0; k < sbp.n; ++k) {
+          std::cout << k << std::endl; 
           VecGetValues(MF[index][k], vn, &vi[0], &vy[0]);
+          std::cout << "got! " << std::endl; 
           for (std::size_t l = 0; l < sbp.n * sbp.n; ++l) {
             MatSetValue(gMF, ii + l, jj + k, vy[l], ADD_VALUES);
           }
@@ -176,6 +185,9 @@ void sbp_sat::x2::compute_MF(
       std::size_t slice_index = i - (factor_index * f[0].size()); 
       std::size_t x_index = factor_index + (block_index * f.size());
       // #pragma omp critical 
+      // std::cout << factor_index << " " 
+      //   << slice_index << " " 
+      //   << x_index << std::endl;
       KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
     }
   }
@@ -218,7 +230,6 @@ void sbp_sat::x2::compute_MF(
   */
 
 }
-
 
 void sbp_sat::x2::compute_MF_sliced(
   std::vector<petsc_vector>       &MF_sliced, 
@@ -338,7 +349,7 @@ void sbp_sat::x2::compute_λA(
   std::size_t mindex;
   // NOTE: j and k are both bound to block indices.
 
-  #pragma omp parallel for private(findex, mindex)
+  // #pragma omp parallel for private(findex, mindex)
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
       for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
@@ -387,28 +398,46 @@ void sbp_sat::x2::compute_λA_reduced(
   const std::size_t limit = sbp.n_interfaces * sbp.n_interfaces * sbp.n_blocks;
   std::size_t i, j, k;
   
-  // #pragma omp parallel for private(i, j, k, findex, mindex)
+  std::size_t outer_counter = 0;
+  std::size_t inner_counter = 0;
+  std::size_t inner_nz_counter = 0;
+
+    // #pragma omp parallel for private(i, j, k, findex, mindex)
   for (std::size_t index = 0; index != limit; ++index) {
     i = index / (sbp.n_interfaces * sbp.n_blocks);
     j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
     k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
     if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+      outer_counter += 1;
       findex = FT_symbols[i][k] - 1;
       auto r = k % sbp.n_blocks_dim == 0 ? 0 
              : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
              : 1;
       mindex = (r * 4) + F_symbols[k][j] - 1;
       double v;
+
       for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
         for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
           v = 0.;
           VecTDot(F[findex][ii], MF[mindex][jj], &v);
           MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+          inner_counter += 1;
+          if (v != 0) {
+            inner_nz_counter += 1;
+          }
         }
       } 
     }
   }
 
+  /*
+  std::cout << "Outer count: " << outer_counter << std::endl;
+  std::cout << "Inner count: " << inner_counter << std::endl;
+  std::cout << "Inner psize: " << sbp.n * sbp.n << std::endl;
+  std::cout << "Inner psize: " << F[0].size() << " "
+  << MF[0].size() << std::endl;
+  std::cout << "Inner nz count: " << inner_nz_counter << std::endl;
+  */
   /*
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
@@ -448,6 +477,9 @@ void sbp_sat::x2::compute_λA_reduced(
   finalize<fw>(λA);
 
   MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
+
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 
 }
 

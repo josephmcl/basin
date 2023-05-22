@@ -260,11 +260,24 @@ void sbp_sat::x2::compute_g(
 void sbp_sat::x2::compute_Mg(
     std::vector<petsc_vector>       &Mg,
     std::vector<KSP>          const &M,
-    std::vector<petsc_vector> const &g) {
+    std::vector<petsc_vector> const &g, 
+    components                const &sbp) {
 
+    // TODO MODIFY TO USE SMALLER SOLVER LIST
+
+    std::size_t j;
     // #pragma omp parallel for
-    for (std::size_t i = 0; i != M.size(); ++i) {
-        KSPSolve(M[i], g[i], Mg[i]);
+    for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
+      j = sbp.n_blocks_dim * i;
+      KSPSolve(M[0], g[j], Mg[j]);
+    }
+    for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
+      j = (sbp.n_blocks_dim * i) + sbp.n_blocks_dim - 1;
+      KSPSolve(M[2], g[j], Mg[j]);
+    }
+    for (std::size_t i = 0; i != sbp.n_blocks_dim * (sbp.n_blocks_dim - 2); ++i) {
+      j = i + ((i / (sbp.n_blocks_dim - 2)) * 2) + 1;
+      KSPSolve(M[1], g[j], Mg[j]);
     }
 }
 

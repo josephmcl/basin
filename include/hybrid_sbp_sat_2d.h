@@ -18,7 +18,6 @@
 #include "linalg.h"
 #include "components.h"
 #include "connect.h"
-
 #include "logging.h"
 
 #include "omp.h"
@@ -639,7 +638,8 @@ void compute_g(
 void compute_Mg(
   std::vector<petsc_vector>       &x,
   std::vector<KSP>          const &M,
-  std::vector<petsc_vector> const &g);
+  std::vector<petsc_vector> const &g, 
+  components                const &sbp);
 
 void initialize_Mg(
   std::vector<petsc_vector>       &Mg, 
@@ -676,6 +676,22 @@ void initialize_symbols(
   vv<std::size_t> &FT_Symbols, 
   vv<std::size_t> const &interfaces,
   components const &sbp);
+
+
+// convergence.cpp
+void copy_approx(
+  petsc_vector &approx, 
+  std::vector<petsc_vector> const &x, 
+  components const &sbp); 
+
+void compute_exact(
+  petsc_vector &exact, 
+  components const &sbp);
+
+void print_convergence(
+  petsc_vector &approx, 
+  petsc_vector &exact, 
+  components const &sbp); 
 
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */

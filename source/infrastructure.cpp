@@ -7,13 +7,25 @@ bool infrastructure::operator !(infrastructure::error e) {
 infrastructure::error
 infrastructure::initialize(int c, char **v) {
     using namespace infrastructure;
-    PetscBool      success;
 
+    bool clean = true;
+
+    // Initialize PETSc.
+    PetscBool petsc_success;
     PetscInitialize(&c, &v, nullptr, nullptr);
-    PetscInitialized(&success); 
+    PetscInitialized(&petsc_success); 
+    clean = static_cast<bool>(petsc_success);
+    
+    if (!clean) return error::petsc_init_failure;
 
+    // Check that OPENMP is installed. 
+    #ifdef _OPENMP 
+        clean = true;
+    #else
+        clean = false;
+    #endif 
 
-    return !success ?error::petsc_init_failure :error::nil; 
+    return !clean ?error::openmp_install_failure :error::nil; 
 }
 
 
