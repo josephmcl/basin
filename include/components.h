@@ -30,6 +30,7 @@ namespace sbp_sat {
   auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
   using petsc_matrix = Mat;
   using petsc_vector = Vec;
+  using petsc_solver = KSP;
 
   namespace x2 {
 
@@ -55,6 +56,8 @@ namespace sbp_sat {
 
     std::size_t n_blocks, n_interfaces;
     std::size_t n_blocks_dim; 
+
+    std::size_t n_threads;
 
     petsc_matrix hl;
     petsc_matrix hx, hy;

@@ -1,14 +1,7 @@
 #include "hybrid_sbp_sat_2d.h"
-
 #include "timing.h"
 
 
-/* [ M  F ][ u ] = [ g   ]
-     [ FT D ][ λ ]   [ g_λ ]
-  
-    [ B   T ][ u ] = [ bu ]
-    [ TT  D ][ λ ]   [ bλ ]
-  */
 
 /* Baseline Poisson solution. Solves A u = b given a 2D volume point 
    dimension and boundary conditions. */
@@ -169,6 +162,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   sbp.n_blocks = n_blocks;         // additional non sbp-sat info. but  
   sbp.n_interfaces = n_interfaces; // useful to have along. 
   sbp.n_blocks_dim = l_blocks;
+  sbp.n_threads = static_cast<std::size_t>(omp_get_max_threads());
   
 
   // Compute flux components used by b. 
@@ -217,10 +211,10 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(B[7], PETSC_VIEWER_STDOUT_SELF);
 
-  vv<std::size_t> F_symbols(n_blocks, // rows 
+  vv<std::size_t> F_symbols(n_blocks,           // rows 
     std::vector<std::size_t>(n_interfaces, 0)); // columns
-  vv<std::size_t> FT_symbols(n_interfaces, // rows
-    std::vector<std::size_t>(n_blocks, 0)); // columns
+  vv<std::size_t> FT_symbols(n_interfaces,      // rows
+    std::vector<std::size_t>(n_blocks, 0));     // columns
 
   sbp_sat::x2::initialize_symbols(F_symbols, FT_symbols, interfaces, sbp);
 
@@ -230,6 +224,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     << std::endl << " | total blocks: " << l_blocks << " x " << l_blocks 
       << " (" << n_blocks << ") "
     << std::endl << " | total interfaces: " << n_interfaces 
+    << std::endl << " | threads: " << sbp.n_threads 
     << std::endl;
 
   /* 
@@ -242,75 +237,34 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   }
   */
   
-
-  // exit(-1);
-
-  // n_points = number of columns in 
-  //            matrix component. 
-
-  //petsc_vector λb
-  //initialize_λb(λb, sbp);
-
-
+  /* Make M blocks */
   auto begin = timing::read();
-  
-  /*
-  auto M = std::vector<petsc_matrix>(sbp.n_blocks);
-  std::array<std::size_t, 4> v;
-  for (std::size_t i = 0; i != sbp.n_blocks; ++i) {
-    for (std::size_t j = 0; j != 4; ++j) {
-      v[j] = boundary_order_map[i][j] == 2? 2: 1;
-    }
-    make_M(M[i], sbp, v);
-  }
-  */
 
-  auto M = std::vector<petsc_matrix>(3);
-  sbp_sat::x2::make_M(M[0], sbp, {1, 1, 2, 1});
-  sbp_sat::x2::make_M(M[1], sbp, {1, 1, 1, 1});
-  sbp_sat::x2::make_M(M[2], sbp, {1, 1, 1, 2});
+    auto M = std::vector<petsc_matrix>(3);
+    sbp_sat::x2::make_M(M[0], sbp, {1, 1, 2, 1});
+    sbp_sat::x2::make_M(M[1], sbp, {1, 1, 1, 1});
+    sbp_sat::x2::make_M(M[2], sbp, {1, 1, 1, 2});
+
   auto end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin
+    << " s # " << "Assembled decomposed M." << std::endl;
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # " 
-    // << "Assembled decomposed M." << std::endl;
-
-  // Make direct solvers
-  begin = timing::read();
-  auto solvers = std::vector<KSP>(M.size());
-
-  std::cout << "OpenMP threads: " << omp_get_num_threads() << std::endl;
-
-  //#pragma omp parallel for 
+  auto solvers = vv<KSP>(M.size());
+  for (auto &e: solvers) 
+    e.resize(sbp.n_threads);
   for (std::size_t i = 0; i != M.size(); ++i) {
-    solvers[i] = KSP();
-    KSPCreate(PETSC_COMM_WORLD, &solvers[i]); 
-    KSPSetOperators(solvers[i], M[i], M[i]);
-    KSPSetFromOptions(solvers[i]);
-    KSPSetUp(solvers[i]);
-    petsc_vector x, y;
-    VecCreateSeq(PETSC_COMM_WORLD, sbp.n * sbp.n, &x); 
-    VecCreateSeq(PETSC_COMM_WORLD, sbp.n * sbp.n, &y); 
-
-    // Call once to factorize
-    KSPSolve(solvers[i], x, y);
-
-    destroy<fw>(x);
-    destroy<fw>(y);
+    for (auto &solver: solvers[i]) {
+      make_local_solver(solver, M[i], sbp.n); 
+    }
   }
-  end = timing::read();
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # " 
-    // << "Assembled decomposed M solvers." << std::endl;
+  end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Assembled decomposed M solvers." << std::endl;
 
   // Make F components
   // (stored as vectors because we compute M^-1 F by solving every row 
-  //  for each component.) 
-
-
-  exit(-1);
-
+  // for each component.) 
   begin = timing::read();
   auto f = std::vector<std::vector<petsc_vector>>(
     4, std::vector<petsc_vector>(n_blocks));  
@@ -318,103 +272,67 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   auto f_data = std::vector<std::vector<double>>();
   make_F(sbp, F, f, f_data);
   end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Assembled decomposed F." << std::endl;
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Assembled decomposed F." << std::endl;
-
-  // petsc_matrix F_explicit;
-  // ake_F_explicit(F_explicit, f, F_symbols, sbp); 
-  // std::cout << "Assembled F explicit." << std::endl;
-
-
+  
   // Compute solve of MX = F.
   begin = timing::read();
   auto MF = vv<petsc_vector>(4 * sbp.n_blocks, 
             std::vector<petsc_vector>(sbp.n)); 
-  // initialize_MF(MF, sbp);
   initialize_MF_reduced(MF, sbp);
-  compute_MF(MF, solvers, f);
+  compute_MF(MF, solvers, f, sbp);
   end = timing::read();
-
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed solve for MX = F." << std::endl;
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed solve for MX = F." << std::endl;
 
   // Compute D.
   begin = timing::read();
   petsc_matrix D;
   compute_D(D, sbp, interfaces);
   end = timing::read();
-  
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed D." << std::endl;  
-  
-  // Check that decomposed MF: 
-  //   - is numerically correct and 
-  //   - aligns with the super indices.  
-  //print_MF(MF, F_symbols, sbp);
-  /*
-  
-  
-  auto FTMF = vv<petsc_matrix>(n_interfaces,
-    std::vector<petsc_matrix>(n_interfaces));
-  for (std::size_t i = 0; i != n_interfaces; ++i) {
-    for (std::size_t j = 0; j != n_interfaces; ++j) {
-        MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n, sbp.n, 
-          sbp.n, nullptr, &FTMF[i][j]);
-    }
-  }
-  compute_ftmf(FTMF, f, MF, F_symbols, FT_symbols, sbp);
-  */
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed D." << std::endl;  
 
+  // Compute λA.
   begin = timing::read();
   petsc_matrix λA; 
   initialize_λA(λA, sbp);
   compute_λA_reduced(λA, D, f, MF, F_symbols, FT_symbols, sbp);
   end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed λA (D - FT * M \\ F)." << std::endl;
-
+  // Solve Mx = g system
   begin = timing::read();
   std::vector<petsc_vector> Mg;
   initialize_Mg(Mg, sbp);
   compute_Mg(Mg, solvers, g, sbp);
   end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Solved Mx = g." << std::endl;
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed Mx = g." << std::endl;
-
+  // Compute λb
   begin = timing::read();
   petsc_vector λb;
   initialize_λb(λb, sbp); 
   // λb = -FT * M \ g 
   compute_λb(λb, F, Mg, FT_symbols, sbp);
   end = timing::read();
-
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed λb (gd - FT * M \\ g)." << std::endl;
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed λb (gd - FT * M \\ g)." << std::endl;
 
   begin = timing::read();
   petsc_vector λ;
-  // initialize_λ(λ, sbp);
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &λ); 
-  // compute_λ(λ, λA, λb);
-  KSP trace_solver;
+  petsc_solver trace_solver;
   KSPCreate(PETSC_COMM_SELF, &trace_solver); 
   KSPSetOperators(trace_solver, λA, λA);
   KSPSetFromOptions(trace_solver);
   KSPSolve(trace_solver, λb, λ);
   end = timing::read();
-
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed λ (λA \\ λb)." << std::endl;
+  logging::out << std::setw(14) << std::fixed << end - begin
+    << " s # " << "Computed λ (λA \\ λb)." << std::endl;
 
   // Compute the solution 
   // solution = M \ (g - F * lambda)
@@ -425,10 +343,10 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &b);
   make_scaled_vec(neg, sbp.n * sbp.n * sbp.n_blocks, 0.);
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &g_explicit);
-  
   {
     const double *values;
     std::vector<int> writei; writei.resize(sbp.n * sbp.n);
+    #pragma omp parallel for collapse(1) private(values) num_threads(sbp.n_threads)
     for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
       for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         writei[i] = sbp.n * sbp.n * block + i;
@@ -437,13 +355,6 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
       VecSetValues(g_explicit, sbp.n * sbp.n, &writei[0], values, INSERT_VALUES);
     }
   }
-
-  // MatMult(F_explicit, λ, b);
-
-  //  F is long [     ]
-  //  lambda is short
-  //  b is tall 
-
   double const *λ_;
   VecGetArrayRead(λ, &λ_);
   std::vector<double> λ_data; 
@@ -451,8 +362,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   λ_data.assign(λ_, λ_ + sbp.n_interfaces * sbp.n);
   b_data.resize(sbp.n_blocks * sbp.n * sbp.n);
   std::size_t k, l, m;
-
-  //#pragma omp parallel for private(k, l, m) 
+  #pragma omp parallel for collapse(1) private(k, l, m) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
     for (std::size_t j = 0; j != sbp.n_blocks * sbp.n * sbp.n; ++j) {
       
@@ -468,46 +378,42 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
       }
     }
   }
-
   std::vector<int> wi; 
   wi.resize(sbp.n * sbp.n * sbp.n_blocks);
+  #pragma omp parallel for num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_blocks * sbp.n * sbp.n; ++i) {
-    wi[0] = i;
+    wi[i] = i;
   }
   VecSetValues(b, sbp.n * sbp.n * sbp.n_blocks, &wi[0], &b_data[0], INSERT_VALUES);
-
   VecAYPX(b, -1., g_explicit);
   finalize<fw>(b);
   end = timing::read();
-
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed b (g - F * λ)." << std::endl;
-
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed b (g - F * λ)." << std::endl;
   
   begin = timing::read();
   std::vector<petsc_vector> x;
   compute_solution(x, solvers, b, sbp);
   end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin
+    << " s # " << "Computed u (M \\ b)." << std::endl;
 
-  logging::out << std::setw(14) << std::fixed << end - begin << std::endl;
-    // << " s # "
-    // << "Computed u (M \\ b)." << std::endl;
-
-  /*
-  petsc_vector approx, exact;
-  copy_approx(approx, x, sbp);
-  compute_exact(exact, sbp);
-  print_convergence(approx, exact, sbp);
-
-  destroy<fw>(approx);
-  destroy<fw>(exact);
-  */
-
-  destroy_MF(MF);
-  destroy_Mg(Mg);
-  destroy<fw>(λA);
-  for (auto &e : M) destroy<fw>(e);
+  // Clean up everything. 
+  for (auto &e: M) destroy<fw>(e);
+  for (auto &e: solvers) {
+    for (auto &ee: e) 
+      KSPDestroy(&ee);
+  }
+  for (auto &e: MF) {
+    for (auto &ee: e) 
+      destroy<fw>(ee);
+  }
+  destroy<fw>(D);
+  for (auto &e: Mg) destroy<fw>(e);
+  destroy<fw>(λb);
+  destroy<fw>(λ);
+  destroy<fw>(b);
+  for (auto &e: x) destroy<fw>(e);
 }
 
 // Given b as a single vector and A as a vector of solvers, 
@@ -516,7 +422,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 // store  
 void sbp_sat::x2::compute_solution(
   std::vector<petsc_vector>       &x,
-  std::vector<KSP>          const &solvers, 
+  vv<petsc_solver>          const &solvers, 
   petsc_vector              const &b, 
   components                const &sbp) {
 
@@ -543,9 +449,9 @@ void sbp_sat::x2::compute_solution(
   }
 
   std::vector<std::vector<double>> bs_; bs_.resize(sbp.n_blocks);
-  //#pragma omp parallel for
+  #pragma omp parallel for num_threads(sbp.n_threads)
   for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
-    double const *v = val + (n2 * block);
+    // double const *v = val + (n2 * block);
     // std::cout << v << " " << v + n2 << std::endl;
     bs_[block].resize(n2);
     bs_[block].assign(&val[n2 * block], &val[n2 * (block + 1)]);
@@ -555,31 +461,37 @@ void sbp_sat::x2::compute_solution(
 
   //#pragma omp parallel for 
 
-  std::size_t j;
+  std::size_t j, thread_index;
+  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
     j = sbp.n_blocks_dim * i;
+    thread_index = omp_get_thread_num();
     VecSetValues(bs[j], n2, &writei[0], &bs_[j][0], INSERT_VALUES);
     finalize<fw>(bs[j]);
 
-    KSPSolve(solvers[0], bs[j], x[j]); 
+    KSPSolve(solvers[0][thread_index], bs[j], x[j]); 
     finalize<fw>(x[j]);
   }
 
+  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
     j = (sbp.n_blocks_dim * i) + sbp.n_blocks_dim - 1;
+    thread_index = omp_get_thread_num();
     VecSetValues(bs[j], n2, &writei[0], &bs_[j][0], INSERT_VALUES);
     finalize<fw>(bs[j]);
 
-    KSPSolve(solvers[2], bs[j], x[j]); 
+    KSPSolve(solvers[2][thread_index], bs[j], x[j]); 
     finalize<fw>(x[j]);
   }
 
+  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_blocks_dim * (sbp.n_blocks_dim - 2); ++i) {
     j = i + ((i / (sbp.n_blocks_dim - 2)) * 2) + 1;
+    thread_index = omp_get_thread_num();
     VecSetValues(bs[j], n2, &writei[0], &bs_[j][0], INSERT_VALUES);
     finalize<fw>(bs[j]);
 
-    KSPSolve(solvers[1], bs[j], x[j]); 
+    KSPSolve(solvers[1][thread_index], bs[j], x[j]); 
     finalize<fw>(x[j]);
   }
 

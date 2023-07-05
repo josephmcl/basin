@@ -61,8 +61,10 @@ namespace timing {
 		}
 	}	
 
-	#ifdef __aarch64__
+	#if defined(__aarch64__)
 		auto read = [](){return tsc_count(read_<architecture::arm>());};
+	#elif defined(__x86_64__)
+		auto read = [](){return tsc_count(read_<architecture::x86>());};
 	#endif
 
     void init(void) {

@@ -10,6 +10,7 @@
 #include <chrono>
 
 // Top level solver for D - FT * M \ F 
+/*
 void sbp_sat::x2::compute_λA_localized(
 	petsc_matrix                    &        λA,
 	std::vector<KSP>          const &         M, 
@@ -34,6 +35,7 @@ void sbp_sat::x2::compute_λA_localized(
   	destroy_MF(MF);
   	destroy<fw>(D);
 }
+*/
 
 void sbp_sat::x2::compute_D(
   petsc_matrix          &D, 
@@ -175,60 +177,24 @@ void sbp_sat::x2::print_MF(
 // M-index major and F-index minor. 
 void sbp_sat::x2::compute_MF(
   vv<petsc_vector>       &x,
-  std::vector<KSP> const &m,
-  vv<petsc_vector> const &f) {
+  vv<petsc_solver> const &m,
+  vv<petsc_vector> const &f,
+  components       const &sbp) {
+  
+  std::size_t block_index, factor_index, slice_index, x_index, thread_index;
 
-  // #pragma omp parallel for
-  for (std::size_t block_index = 0; block_index != m.size(); ++block_index) {
-    for (std::size_t i = 0; i != f.size() * f[0].size(); ++i) {
-      std::size_t factor_index = i / f[0].size();
-      std::size_t slice_index = i - (factor_index * f[0].size()); 
-      std::size_t x_index = factor_index + (block_index * f.size());
-      // #pragma omp critical 
-      // std::cout << factor_index << " " 
-      //   << slice_index << " " 
-      //   << x_index << std::endl;
-      KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
-    }
-  }
-
-  /* NOTE: A fully unrolled loop won't work! Because KSPs are not thread
-           safe.
-
+  std::size_t const limit = m.size() * f.size() * f[0].size();
+  #pragma omp parallel for num_threads(sbp.n_threads) private(block_index, factor_index, slice_index, x_index, thread_index)
   for (std::size_t index = 0; index != limit; ++index) {
-  	
-    std::size_t block_index = index / (f.size() * f[0].size());
-  	std::size_t factor_index = (index % (f.size() * f[0].size())) / f[0].size();
-    std::size_t slice_index = (index % (f.size() * f[0].size())) - (factor_index * f[0].size()); 
-    std::size_t x_index = factor_index + (block_index * f.size());
+ 
+    block_index = index / (f.size() * f[0].size());
+  	factor_index = (index % (f.size() * f[0].size())) / f[0].size();
+    slice_index = (index % (f.size() * f[0].size())) - (factor_index * f[0].size()); 
+    x_index = factor_index + (block_index * f.size());
+    thread_index = static_cast<std::size_t>(omp_get_thread_num());
 
-    KSPSolve(m[block_index], f[factor_index][slice_index], x[x_index][slice_index]);
+    KSPSolve(m[block_index][thread_index], f[factor_index][slice_index], x[x_index][slice_index]);
   }
-  */ 
-
-  /*
-  auto start = std::chrono::steady_clock::now();
-  // #pragma omp parallel for num_threads(4) private(m)
-
-  std::size_t test = 0;
-  for (std::size_t block_index = 0; block_index != m.size(); ++block_index) { //  -------- n blocks
-    for (std::size_t f_index = 0; f_index != f.size(); ++f_index) { // ------- 4
-      for (std::size_t slice_index = 0; slice_index != f[f_index].size(); ++slice_index) { // -- n blocks
-      	std::size_t index = (f_index) + (block_index * f.size());
-        // std::cout << indez << " " << index << std::endl;
-        // std::cout << "solve with block " << block_index << " on "
-        //   << " f " << f_index << " slice " << slice_index << " into x index " 
-        //   << index << ", " << slice_index << std::endl;
-        KSPSolve(m[block_index], f[f_index][slice_index], x[index][slice_index]);
-      }
-      // indez += 1;
-    }
-  }
-  auto end = std::chrono::steady_clock::now();
-  std::chrono::duration<double> diff = end-start;
-  std::cout << "The interval is " << diff.count() << "\n";
-  */
-
 }
 
 void sbp_sat::x2::compute_MF_sliced(
@@ -349,10 +315,11 @@ void sbp_sat::x2::compute_λA(
   std::size_t mindex;
   // NOTE: j and k are both bound to block indices.
 
-  // #pragma omp parallel for private(findex, mindex)
+  #pragma omp parallel for collapse(2) private(findex, mindex) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
     for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
       for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+        // std::cout << omp_get_thread_num();
         if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
           findex = FT_symbols[i][k] - 1;
           mindex = (k * 4) + F_symbols[k][j] - 1;
@@ -398,17 +365,23 @@ void sbp_sat::x2::compute_λA_reduced(
   const std::size_t limit = sbp.n_interfaces * sbp.n_interfaces * sbp.n_blocks;
   std::size_t i, j, k;
   
-  std::size_t outer_counter = 0;
-  std::size_t inner_counter = 0;
-  std::size_t inner_nz_counter = 0;
+  //std::size_t outer_counter = 0;
+  //std::size_t inner_counter = 0;
+  //std::size_t inner_nz_counter = 0;
 
-    // #pragma omp parallel for private(i, j, k, findex, mindex)
+  // std::cout << "limit :" << limit << std::endl;
+
+  //int x = 0;
+  #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
   for (std::size_t index = 0; index != limit; ++index) {
     i = index / (sbp.n_interfaces * sbp.n_blocks);
     j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
     k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
+    
+    
     if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
-      outer_counter += 1;
+
+      // outer_counter += 1;
       findex = FT_symbols[i][k] - 1;
       auto r = k % sbp.n_blocks_dim == 0 ? 0 
              : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
@@ -421,14 +394,24 @@ void sbp_sat::x2::compute_λA_reduced(
           v = 0.;
           VecTDot(F[findex][ii], MF[mindex][jj], &v);
           MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+          
+          // #pragma omp critical 
+          // {
+          //  x += 1;
+          // }
+          
+          /*
           inner_counter += 1;
           if (v != 0) {
             inner_nz_counter += 1;
           }
+          */
         }
       } 
     }
   }
+
+  // std::cout << x << std::endl;
 
   /*
   std::cout << "Outer count: " << outer_counter << std::endl;

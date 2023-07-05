@@ -19,6 +19,7 @@
 #include "components.h"
 #include "connect.h"
 #include "logging.h"
+#include "local_solver.h"
 
 #include "omp.h"
 
@@ -452,7 +453,7 @@ void add_boundary(
 
 void compute_solution(
   std::vector<petsc_vector>       &x,
-  std::vector<KSP>          const &A, 
+  vv<petsc_solver>          const &A, 
   petsc_vector              const &b, 
   components                const &sbp);
 
@@ -520,8 +521,9 @@ void compute_D(
 // M^-1 * F functions 
 void compute_MF(
   vv<petsc_vector>       &x,
-  std::vector<KSP> const &m,
-  vv<petsc_vector> const &f);
+  vv<petsc_solver> const &m,
+  vv<petsc_vector> const &f,
+  components       const &sbp);
 
 void initialize_MF(
   vv<petsc_vector>       &MF, 
@@ -637,7 +639,7 @@ void compute_g(
 
 void compute_Mg(
   std::vector<petsc_vector>       &x,
-  std::vector<KSP>          const &M,
+  vv<petsc_solver>          const &M,
   std::vector<petsc_vector> const &g, 
   components                const &sbp);
 
