@@ -7,7 +7,9 @@ include .env
 target = main
 
 # cc = g++-12
-cc = g++-13
+# cc = g++-13
+
+cc = ${CC}
 
 source_ext = cpp
 header_directory = include
@@ -55,8 +57,10 @@ openmpi_include  := -I${OPENMPI_INCLUDE}
 cernroot_include := -I${CERN_ROOT_INCLUDE}
 openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include
 
-includes := -I./$(header_directory) $(petsc_include) \
-	$(openmpi_include) $(openmp_include)
+includes := -I./$(header_directory) $(petsc_include)
+#  \
+#	$(openmpi_include) 
+# $(openmp_include)
  # $(cernroot_include)
 
 test_includes := $(includes) -I./$(test_directory)
@@ -65,14 +69,16 @@ cernroot_library := -L${CERN_ROOT_LIBRARY} #--with-debugging=yes
 
 home_library := -L/opt/homebrew/lib 
 pthread_library := -lpthread
-petsc_library := /opt/homebrew/Cellar/petsc/3.19.1/lib/libpetsc.dylib
+petsc_library := ${PETSC_LIBRARY}
 mpi_library := /opt/homebrew/Cellar/open-mpi/4.1.5/lib/libmpi.dylib
 openmp_library := /opt/homebrew/Cellar/libomp/16.0.4/lib/libomp.dylib
 
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
-libraries := $(home_library) $(petsc_library) $(pthread_library) \
-	$(mpi_library) $(openmp_library)
+libraries := $(petsc_library) $(pthread_library) \
+	-fopenmp
+#	$(mpi_library) -fopenmp 
+# $(openmp_library)
  # -lomp #$(cernroot_library) 
 
 define speaker
@@ -93,7 +99,7 @@ $(binary_directory)/$(test_target): $(objects) $(test_objects)
 
 $(objects): $(object_directory)/%.o: $(source_directory)/%.$(source_ext)
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(includes)) 
+	$(cc) $(compiler_flags) -c $< -o $@ -fopenmp $(includes)) 
 
 $(test_objects): $(object_directory)/%.o : $(test_directory)/%.cpp
 	$(call speaker,\

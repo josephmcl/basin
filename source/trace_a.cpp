@@ -378,7 +378,6 @@ void sbp_sat::x2::compute_λA_reduced(
     j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
     k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
     
-    
     if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
 
       // outer_counter += 1;
@@ -394,76 +393,77 @@ void sbp_sat::x2::compute_λA_reduced(
           v = 0.;
           VecTDot(F[findex][ii], MF[mindex][jj], &v);
           MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
-          
-          // #pragma omp critical 
-          // {
-          //  x += 1;
-          // }
-          
-          /*
-          inner_counter += 1;
-          if (v != 0) {
-            inner_nz_counter += 1;
-          }
-          */
         }
       } 
     }
   }
 
-  // std::cout << x << std::endl;
-
-  /*
-  std::cout << "Outer count: " << outer_counter << std::endl;
-  std::cout << "Inner count: " << inner_counter << std::endl;
-  std::cout << "Inner psize: " << sbp.n * sbp.n << std::endl;
-  std::cout << "Inner psize: " << F[0].size() << " "
-  << MF[0].size() << std::endl;
-  std::cout << "Inner nz count: " << inner_nz_counter << std::endl;
-  */
-  /*
-  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
-    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
-      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
-
-        // std::cout << i << " " << j << " " << k << std::endl;
-
-        if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
-          findex = FT_symbols[i][k] - 1;
-          auto r = k % sbp.n_blocks_dim == 0 ? 0 
-                 : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
-                 : 1;
-          mindex = (r * 4) + F_symbols[k][j] - 1;
-          // std::cout << "Compute GGGG FTMF super-index " << i 
-          //  << ", " << j << " (" << FT_symbols[i][k] << "), (" 
-          //  << F_symbols[k][j] << ")" << std::endl;
-          // std::cout << "given global index " << k << " read local " <<
-          //   "index " << r << std::endl;
-
-          
-          double v;
-          for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
-            for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
-              v = 0.;
-              VecTDot(F[findex][ii], MF[mindex][jj], &v);
-              MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
-            }
-          } 
-          
-
-        }
-      }
-    }
-  }
-  */
-
   finalize<fw>(λA);
-
   MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
-
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+}
 
+void compute_λA_gemm( 
+  petsc_matrix                   &λA, 
+  petsc_matrix              const &D, 
+  std::vector<petsc_matrix> const &F, 
+  std::vector<petsc_matrix> const &MF, 
+  vv<std::size_t>           const &F_symbols,
+  vv<std::size_t>           const &FT_symbols,
+  components                const &sbp) {
+
+  std::size_t findex;
+  std::size_t mindex;
+  // NOTE: j and k are both bound to block indices.
+
+  const std::size_t limit = sbp.n_interfaces * sbp.n_interfaces * sbp.n_blocks;
+  std::size_t i, j, k;
+  
+  //std::size_t outer_counter = 0;
+  //std::size_t inner_counter = 0;
+  //std::size_t inner_nz_counter = 0;
+
+  // std::cout << "limit :" << limit << std::endl;
+
+  //int x = 0;
+  #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+  for (std::size_t index = 0; index != limit; ++index) {
+    i = index / (sbp.n_interfaces * sbp.n_blocks);
+    j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
+    k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
+    
+    if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+
+      // outer_counter += 1;
+      findex = FT_symbols[i][k] - 1;
+      auto r = k % sbp.n_blocks_dim == 0 ? 0 
+             : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+             : 1;
+      mindex = (r * 4) + F_symbols[k][j] - 1;
+      double v;
+
+      std::vector<int> ind(sbp.n); 
+      for (int i = 0; i != sbp.n; ++i) ind[i] = i;
+
+      petsc_matrix res;
+      MatMult(res, F[findex], MF[mindex]);
+      MatGetValues(res, sbp.n, {}, {})
+
+      for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+        for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+          v = 0.;
+          VecTDot(F[findex][ii], MF[mindex][jj], &v);
+          MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+        }
+      } 
+    }
+  }
+
+  finalize<fw>(λA);
+  MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
 
 void sbp_sat::x2::initialize_λA(

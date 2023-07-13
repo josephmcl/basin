@@ -585,6 +585,15 @@ void compute_λA_reduced(
   vv<std::size_t>  const &FT_symbols,
   components       const &sbp); 
 
+  void compute_λA_gemm( 
+  petsc_matrix                   &λA, 
+  petsc_matrix              const &D, 
+  std::vector<petsc_matrix> const &F, 
+  std::vector<petsc_matrix> const &MF, 
+  vv<std::size_t>           const &F_symbols,
+  vv<std::size_t>           const &FT_symbols,
+  components                const &sbp); 
+
 void initialize_λA(
   petsc_matrix     &λA, 
   components const &sbp);
