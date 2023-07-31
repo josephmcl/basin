@@ -382,7 +382,7 @@ void sbp_sat::x2::compute_λA_reduced(
 
       // outer_counter += 1;
       findex = FT_symbols[i][k] - 1;
-      auto r = k % sbp.n_blocks_dim == 0 ? 0 
+      auto r = k % sbp.n_blocks_dim== 0 ? 0 
              : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
              : 1;
       mindex = (r * 4) + F_symbols[k][j] - 1;
@@ -404,7 +404,7 @@ void sbp_sat::x2::compute_λA_reduced(
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
 
-void compute_λA_gemm( 
+void sbp_sat::x2::compute_λA_gemm( 
   petsc_matrix                   &λA, 
   petsc_matrix              const &D, 
   std::vector<petsc_matrix> const &F, 
@@ -441,22 +441,22 @@ void compute_λA_gemm(
              : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
              : 1;
       mindex = (r * 4) + F_symbols[k][j] - 1;
-      double v;
 
       std::vector<int> ind(sbp.n); 
-      for (int i = 0; i != sbp.n; ++i) ind[i] = i;
+      for (std::size_t i = 0; i != sbp.n; ++i) ind[i] = i;
 
       petsc_matrix res;
-      MatMult(res, F[findex], MF[mindex]);
-      MatGetValues(res, sbp.n, {}, {})
+      MatMatMult(F[findex], MF[mindex], MAT_INITIAL_MATRIX, PETSC_DEFAULT, &res);
 
-      for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
-        for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
-          v = 0.;
-          VecTDot(F[findex][ii], MF[mindex][jj], &v);
-          MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
-        }
-      } 
+      std::vector<int> allm(sbp.n); make_index_vec(allm);
+      std::vector<int> alln(sbp.n) ; make_index_vec(alln);
+      std::vector<double> data(sbp.n * sbp.n);
+      MatGetValues(res, sbp.n, &allm[0], sbp.n, &alln[0], &data[0]);
+      for (std::size_t b = 0; b != alln.size(); ++b) {
+        allm[b] += i * sbp.n;
+        alln[b] += j * sbp.n;
+      }
+      MatSetValues(λA, sbp.n, &allm[0], sbp.n, &alln[0], &data[0], ADD_VALUES);
     }
   }
 
@@ -465,6 +465,33 @@ void compute_λA_gemm(
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
+
+void 
+copy_MF(
+  std::vector<petsc_matrix>       &MF_mat,
+  vv<petsc_vector>          const &MF_vec) {
+
+  MF_mat.resize(MF_vec.size());
+
+  int m[1] = 0;
+  std::vector<int> n(MF_vec[i].size());
+  for (std::size_t i = 0; i != MF_vec[0].size(); ++i) {
+
+    n[i] = i;
+  }
+  const real_t *data;
+  for (std::size_t i = 0; i != MF_mat.size(); ++i) {
+    
+    for (std::size_t j = 0; j != MF_vec[i].size(); ++j) {
+      
+      m[0] = j;
+      VecGetArrayRead(MF_vec[i][j], &data);
+      MatSetValues(MF_mat[i], 1, m, MF_vec[i].size(), &n[0], data, INSERT_VALUES) 
+    }
+    finalize<fw>(MF_mat[i]);
+  }
+
+} // TODO: untested 
 
 void sbp_sat::x2::initialize_λA(
   petsc_matrix     &λA, 

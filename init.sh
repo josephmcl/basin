@@ -1,6 +1,6 @@
 #!/bin/bash
 module load gcc/12.2.0
-MKLROOT=/packages/intel/19/linux/mkl
+MKLROOT=/packages/intel/19/linux/mklls
 export MKLROOT
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/jmclaug2/petsc/arch-linux-c-opt/lib/
 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$MKLROOT/lib/intel64

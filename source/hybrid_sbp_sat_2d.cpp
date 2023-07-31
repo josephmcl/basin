@@ -286,6 +286,11 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed solve for MX = F." << std::endl;
 
+  // TODO: Convert MF to vector of matrix
+
+  auto MF_mat = std::vector<petsc_matrix>(4 * sbp.n_blocks); 
+  copy_MF(MF_mat, mat);
+
   // Compute D.
   begin = timing::read();
   petsc_matrix D;
@@ -302,6 +307,13 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+
+
+  void sbp_sat::x2::compute_λA_gemm(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+
+  // std::vector<petsc_matrix> const &F, 
+  // std::vector<petsc_matrix> const &MF, 
+
 
   // Solve Mx = g system
   begin = timing::read();
@@ -507,6 +519,13 @@ void sbp_sat::x2::make_scaled_vec(
     VecSetValue(v, static_cast<int>(i), s, INSERT_VALUES);
   } 
   finalize<fw>(v);
+}
+
+/* Helper for index vectors that petsc needs a lot. */
+void sbp_sat::x2::make_index_vec(std::vector<int> &v) {
+  for (std::size_t i = 0; i != v.size(); ++i) {
+    v[i] = static_cast<int>(i);
+  } 
 }
 
 void sbp_sat::x2::

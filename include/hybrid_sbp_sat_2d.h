@@ -497,6 +497,8 @@ void make_scaled_vec(
   std::size_t   n,
   real_t        s = 1.);
 
+void make_index_vec(std::vector<int> &v);
+
 // Definitions located in trace_a.cpp. These include functions exclusive  
 // to computing λA = D - FT * M \ F 
 
@@ -585,14 +587,18 @@ void compute_λA_reduced(
   vv<std::size_t>  const &FT_symbols,
   components       const &sbp); 
 
-  void compute_λA_gemm( 
-  petsc_matrix                   &λA, 
+void compute_λA_gemm( 
+  petsc_matrix                    &λA, 
   petsc_matrix              const &D, 
   std::vector<petsc_matrix> const &F, 
   std::vector<petsc_matrix> const &MF, 
   vv<std::size_t>           const &F_symbols,
   vv<std::size_t>           const &FT_symbols,
   components                const &sbp); 
+
+void copy_MF(
+  std::vector<petsc_matrix>       &MF_mat,
+  vv<petsc_vector>          const &F_symbols);  
 
 void initialize_λA(
   petsc_matrix     &λA, 
