@@ -104,7 +104,7 @@ void sbp_sat::x2::initialize_MF_reduced(
   vv<petsc_vector>       &MF, 
   components       const &sbp) {
 
-  for (std::size_t i = 0; i != 4 * 3; ++i) {
+  for (std::size_t i = 0; i != 4 * sbp.n_blocks; ++i) {
     for (std::size_t j = 0; j != sbp.n; ++j) {
       VecCreateSeq(
         PETSC_COMM_SELF, 
@@ -345,8 +345,8 @@ void sbp_sat::x2::compute_λA(
 
   MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
 
-  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
-  // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+  PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
 
 void sbp_sat::x2::compute_λA_reduced( 
@@ -372,29 +372,34 @@ void sbp_sat::x2::compute_λA_reduced(
   // std::cout << "limit :" << limit << std::endl;
 
   //int x = 0;
-  #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
-  for (std::size_t index = 0; index != limit; ++index) {
-    i = index / (sbp.n_interfaces * sbp.n_blocks);
-    j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
-    k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
+  //#pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+  //for (std::size_t index = 0; index != limit; ++index) {
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+  //  i = index / (sbp.n_interfaces * sbp.n_blocks);
+  //  j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
+  //  k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
     
-    if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+        if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
 
-      // outer_counter += 1;
-      findex = FT_symbols[i][k] - 1;
-      auto r = k % sbp.n_blocks_dim== 0 ? 0 
-             : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
-             : 1;
-      mindex = (r * 4) + F_symbols[k][j] - 1;
-      double v;
+          // outer_counter += 1;
+          findex = FT_symbols[i][k] - 1;
+          auto r = k % sbp.n_blocks_dim== 0 ? 0 
+                : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+                : 1;
+          mindex = (r * 4) + F_symbols[k][j] - 1;
+          double v;
 
-      for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
-        for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
-          v = 0.;
-          VecTDot(F[findex][ii], MF[mindex][jj], &v);
-          MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+          for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+            for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+              v = 0.;
+              VecTDot(F[findex][ii], MF[mindex][jj], &v);
+              MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+            }
+          } 
         }
-      } 
+      }
     }
   }
 
@@ -427,36 +432,45 @@ void sbp_sat::x2::compute_λA_gemm(
   // std::cout << "limit :" << limit << std::endl;
 
   //int x = 0;
-  #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
-  for (std::size_t index = 0; index != limit; ++index) {
-    i = index / (sbp.n_interfaces * sbp.n_blocks);
-    j = (index - (i * sbp.n_interfaces * sbp.n_blocks)) / sbp.n_blocks;
-    k = (index - (j * sbp.n_blocks)) % sbp.n_blocks;
+  // #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
     
-    if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
+        if (FT_symbols[i][k] > 0 && F_symbols[k][j] > 0) {
 
-      // outer_counter += 1;
-      findex = FT_symbols[i][k] - 1;
-      auto r = k % sbp.n_blocks_dim == 0 ? 0 
-             : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
-             : 1;
-      mindex = (r * 4) + F_symbols[k][j] - 1;
+          // outer_counter += 1;
+          findex = FT_symbols[i][k] - 1;
+          auto r = k % sbp.n_blocks_dim == 0 ? 0 
+                : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+                : 1;
+          mindex = (r * 4) + F_symbols[k][j] - 1;
 
-      std::vector<int> ind(sbp.n); 
-      for (std::size_t i = 0; i != sbp.n; ++i) ind[i] = i;
+          std::vector<int> ind(sbp.n); 
+          for (std::size_t i = 0; i != sbp.n; ++i) ind[i] = i;
 
-      petsc_matrix res;
-      MatMatMult(F[findex], MF[mindex], MAT_INITIAL_MATRIX, PETSC_DEFAULT, &res);
+          petsc_matrix res;
+          MatMatMult(F[findex], MF[mindex], MAT_INITIAL_MATRIX, PETSC_DEFAULT, &res);
+          finalize<fw>(res);
 
-      std::vector<int> allm(sbp.n); make_index_vec(allm);
-      std::vector<int> alln(sbp.n) ; make_index_vec(alln);
-      std::vector<double> data(sbp.n * sbp.n);
-      MatGetValues(res, sbp.n, &allm[0], sbp.n, &alln[0], &data[0]);
-      for (std::size_t b = 0; b != alln.size(); ++b) {
-        allm[b] += i * sbp.n;
-        alln[b] += j * sbp.n;
+          // int a,b,c,d;
+          // MatGetSize(res, &a, &b);
+          // std::cout << a << "-- " << b << std::endl;
+
+          // std::cout << i << " " << j << std::endl;
+
+          std::vector<int> allm(sbp.n); make_index_vec(allm);
+          std::vector<int> alln(sbp.n) ; make_index_vec(alln);
+          std::vector<double> data(sbp.n * sbp.n);
+          MatGetValues(res, sbp.n, &allm[0], sbp.n, &alln[0], &data[0]);
+          for (std::size_t b = 0; b != alln.size(); ++b) {
+            allm[b] += i * sbp.n;
+            alln[b] += j * sbp.n;
+          }
+          MatSetValues(λA, sbp.n, &allm[0], sbp.n, &alln[0], &data[0], ADD_VALUES);
+        }
       }
-      MatSetValues(λA, sbp.n, &allm[0], sbp.n, &alln[0], &data[0], ADD_VALUES);
     }
   }
 
@@ -466,32 +480,111 @@ void sbp_sat::x2::compute_λA_gemm(
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
 
+
+void sbp_sat::x2::make_interface_list(
+  vv<std::size_t>       &interface_list, 
+  vv<std::size_t>          const &F_symbols,
+  vv<std::size_t>          const &FT_symbols,
+  components               const &sbp) {  
+
+  std::size_t findex;
+  std::size_t mindex;
+
+  interface_list.resize(sbp.n_interfaces);
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+        if (F_symbols[k][i] > 0 && FT_symbols[j][k] > 0) {
+          interface_list[i].push_back(j);
+
+          findex = FT_symbols[i][k] - 1;
+          auto r = k % sbp.n_blocks_dim == 0 ? 0 
+                : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+                : 1;
+          mindex = (r * 4) + F_symbols[k][j] - 1;
+
+          std::cout << findex << " " << mindex << std::endl;
+
+        }
+      }
+    }
+  }
+}
+
+void sbp_sat::x2::compute_λA_gemm_flat( 
+  petsc_matrix                    &λA, 
+  petsc_matrix              const &D, 
+  std::vector<petsc_matrix> const &MF, 
+  vv<std::size_t>           const &indices, 
+  components                const &sbp) {
+
+  std::size_t findex;
+  std::size_t mindex;
+  // NOTE: j and k are both bound to block indices.
+
+  const std::size_t limit = sbp.n_interfaces * sbp.n_interfaces * sbp.n_blocks;
+  std::size_t i, j, k;
+  
+  //std::size_t outer_counter = 0;
+  //std::size_t inner_counter = 0;
+  //std::size_t inner_nz_counter = 0;
+
+  // std::cout << "limit :" << limit << std::endl;
+
+  //int x = 0;
+  // #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
+
+  for (std::size_t i = 0; i != indices.size(); ++i) {
+    
+    // findex[]
+
+  }
+
+  finalize<fw>(λA);
+  MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+
+}
+
 void 
-copy_MF(
+sbp_sat::x2::copy_MF(
   std::vector<petsc_matrix>       &MF_mat,
   vv<petsc_vector>          const &MF_vec) {
 
   MF_mat.resize(MF_vec.size());
 
-  int m[1] = 0;
-  std::vector<int> n(MF_vec[i].size());
-  for (std::size_t i = 0; i != MF_vec[0].size(); ++i) {
-
-    n[i] = i;
+  int m, n, col;
+  VecGetSize(MF_vec[0][0], &m);
+  std::vector<int> rows(m);
+  for (std::size_t i = 0; i != static_cast<std::size_t>(m); ++i) {
+    rows[i] = i;
   }
-  const real_t *data;
-  for (std::size_t i = 0; i != MF_mat.size(); ++i) {
-    
-    for (std::size_t j = 0; j != MF_vec[i].size(); ++j) {
-      
-      m[0] = j;
-      VecGetArrayRead(MF_vec[i][j], &data);
-      MatSetValues(MF_mat[i], 1, m, MF_vec[i].size(), &n[0], data, INSERT_VALUES) 
+
+  n = MF_vec[0].size();
+
+  double *data;
+  for (std::size_t i = 0; i != MF_vec.size(); ++i) {
+
+    // make petsc matrix
+    MatCreateSeqAIJ(PETSC_COMM_SELF, m, n, n, nullptr, &MF_mat[i]);         
+
+    // over each column 
+    for (std::size_t j = 0; j != static_cast<std::size_t>(n); ++j) {
+
+      col = j;
+
+      // copy column vector data
+      VecGetArray(MF_vec[i][j], &data); 
+
+      // write into new matrix
+      MatSetValues(MF_mat[i], m, &rows[0], 1, &col, data, INSERT_VALUES);
     }
+
     finalize<fw>(MF_mat[i]);
   }
-
-} // TODO: untested 
+} 
 
 void sbp_sat::x2::initialize_λA(
   petsc_matrix     &λA, 

@@ -193,6 +193,8 @@ void main_2d() {
 
  //  params = {{30, 28}, {28, 30}, {24, 35}, {21, 40}};
 
+  params = {{16, 3}};
+
   for (auto &e : params)
     sbp_sat::x2::petsc_hybridized_poisson(std::get<0>(e), std::get<1>(e));
   

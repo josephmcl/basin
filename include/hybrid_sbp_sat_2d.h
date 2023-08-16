@@ -20,6 +20,9 @@
 #include "connect.h"
 #include "logging.h"
 #include "local_solver.h"
+#include "verify.h"
+
+#include "compute_lambdaA_mkl.h"
 
 #include "omp.h"
 
@@ -479,6 +482,10 @@ void make_F_sliced(
   petsc_matrix              const &F_explicit,  
   components                const &sbp);
 
+void make_F_textra(
+  components const &sbp, 
+  vv<petsc_matrix> &F);
+
 void make_explicit_solvers(
   std::vector<KSP>                &solvers,
   std::vector<petsc_matrix> const &M,
@@ -518,6 +525,11 @@ void compute_D(
   components      const &sbp, 
   vv<std::size_t> const &interfaces);
 
+void make_interface_list(
+  vv<std::size_t>       &interface_list, 
+  vv<std::size_t>          const &F_symbols,
+  vv<std::size_t>          const &FT_symbols,
+  components               const &sbp); 
 
 
 // M^-1 * F functions 
@@ -594,6 +606,13 @@ void compute_λA_gemm(
   std::vector<petsc_matrix> const &MF, 
   vv<std::size_t>           const &F_symbols,
   vv<std::size_t>           const &FT_symbols,
+  components                const &sbp); 
+
+void compute_λA_gemm_flat( 
+  petsc_matrix                    &λA, 
+  petsc_matrix              const &D, 
+  std::vector<petsc_matrix> const &MF, 
+  vv<std::size_t>           const &indices, 
   components                const &sbp); 
 
 void copy_MF(

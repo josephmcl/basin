@@ -95,8 +95,15 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   vv<std::size_t> interfaces;
   std::size_t n_interfaces = ::x2::make_connectivity(interfaces, l_blocks);
 
+  for (auto r : interfaces) {
+    for (auto e : r) {
+      std::cout <<  e << " ";
+    }
+    std::cout << std::endl;
+  }
+
   /*
-  std::vector<std::vector<std::size_t>> interfaces = {
+  interfaces = {
     {0, 1, 0, 3, 0, 0, 0, 0, 0}, 
     {0, 0, 2, 0, 4, 0, 0, 0, 0}, 
     {0, 0, 0, 0, 0, 5, 0, 0, 0}, 
@@ -106,7 +113,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     {0, 0, 0, 0, 0, 0, 0, 11, 0}, 
     {0, 0, 0, 0, 0, 0, 0, 0, 12}, 
     {0, 0, 0, 0, 0, 0, 0, 0, 0}};
-
+  
    {{0, 1, 0, 7, 0, 0, 0, 0, 0}, 
     {0, 0, 2, 0, 8, 0, 0, 0, 0}, 
     {0, 0, 0, 0, 0, 9, 0, 0, 0}, 
@@ -151,6 +158,13 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     }
   }
   */
+
+  for (auto r : interfaces) {
+    for (auto e : r) {
+      std::cout <<  e << " ";
+    }
+    std::cout << std::endl;
+  }
 
  // components class contains most of the sbp-sat component matrices
   // needed to set up an sbp-sat problem.
@@ -269,11 +283,18 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   auto f = std::vector<std::vector<petsc_vector>>(
     4, std::vector<petsc_vector>(n_blocks));  
   auto F = std::vector<petsc_matrix>(4);  
+  auto FF = vv<petsc_matrix>(sbp.n_threads, std::vector<petsc_matrix>(4)); 
   auto f_data = std::vector<std::vector<double>>();
   make_F(sbp, F, f, f_data);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Assembled decomposed F." << std::endl;
+
+  begin = timing::read();
+  make_F_textra(sbp, FF);
+  end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+  << " s # " << "Assembled addtional F data." << std::endl;
 
   
   // Compute solve of MX = F.
@@ -289,7 +310,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   // TODO: Convert MF to vector of matrix
 
   auto MF_mat = std::vector<petsc_matrix>(4 * sbp.n_blocks); 
-  copy_MF(MF_mat, mat);
+  copy_MF(MF_mat, MF);
 
   // Compute D.
   begin = timing::read();
@@ -299,6 +320,13 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed D." << std::endl;  
 
+
+  vv<std::size_t> lambda_indices;
+  make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
+
+  //for (std::size_t i = 0; i < lambda_indices.size() - 2; i += 2)
+  //  std::cout << lambda_indices[i] << " " << lambda_indices[i + 1] << std::endl;
+
   // Compute λA.
   begin = timing::read();
   petsc_matrix λA; 
@@ -306,10 +334,34 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   compute_λA_reduced(λA, D, f, MF, F_symbols, FT_symbols, sbp);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+    << " s # " << "Computed λA vTv (D - FT * M \\ F)." << std::endl;
 
 
-  void sbp_sat::x2::compute_λA_gemm(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+  begin = timing::read();
+  petsc_matrix λA_alt; 
+  initialize_λA(λA_alt, sbp);
+  compute_λA_gemm(λA_alt, D, F, MF_mat, F_symbols, FT_symbols, sbp);
+  end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed λA GEMM (D - FT * M \\ F)." << std::endl;
+
+  begin = timing::read();
+  petsc_matrix λA_pgf; 
+  initialize_λA(λA_alt, sbp);
+  compute_λA_gemm_flat(λA_pgf, D, MF_mat, lambda_indices, sbp);
+  end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed λA GEMM Parallel (D - FT * M \\ F)." << std::endl;
+
+  
+  verify::petsc_matrix(λA, λA_alt);
+
+  hss_poisson_2d::compute_lambdaA_mkl();
+
+  // MatAXPY(λA_alt, -1., λA, DIFFERENT_NONZERO_PATTERN);
+
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_DEFAULT);
+  // MatView(λA_alt, PETSC_VIEWER_STDOUT_SELF);
 
   // std::vector<petsc_matrix> const &F, 
   // std::vector<petsc_matrix> const &MF, 
@@ -787,6 +839,23 @@ void sbp_sat::x2::make_F(
     for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
       f_data[1][(i * sbp.n * sbp.n) + j] = vals[j];
     }
+  }
+}
+
+void sbp_sat::x2::make_F_textra(
+  components const &sbp, 
+  vv<petsc_matrix> &F) {
+  
+  //#pragma omp parallel for num_threads(sbp.n_threads)
+  for (std::size_t i = 0; i != sbp.n_threads; ++i) {
+    // (-τ * LN + β * LN* BS_y) * H_x 
+    fcompop(F[i][3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+    // (-τ * LS + β * LS* BS_x) * H_x 
+    fcompop(F[i][2], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
+    // (-τ * LE + β * LE* BS_y) * H_y 
+    fcompop(F[i][1], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+    // (-τ * LW + β * LW* BS_y) * H_y 
+    fcompop(F[i][0], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
   }
 }
 
