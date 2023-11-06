@@ -96,7 +96,7 @@ libraries := $(petsc_library) $(pthread_library) $(mkl_library) \
  # -lomp #$(cernroot_library) 
 
 # More MKL Implementation stuff
-mkl_impl_includes  := -I./$(header_directory) $(mkl_include)
+mkl_impl_includes  := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include)
 mkl_impl_libraries := $(pthread_library) $(mkl_library)
 
 define speaker
