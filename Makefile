@@ -46,8 +46,8 @@ objects_and_test_objects += $(test_objects)
 
 rm = rm -f
 
-gccflags = -std=c++2a -Wall -Wpedantic -g -O3 \
-		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8 -fopenmp
+gccflags = -std=c++2a -Wall -Wpedantic -O3 \
+		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8 -fopenmp -ffast-math
 
 compiler_flags := $(gccflags) 
 
@@ -76,7 +76,7 @@ openmp_library := /opt/homebrew/Cellar/libomp/16.0.4/lib/libomp.dylib
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
 libraries := $(petsc_library) $(pthread_library) \
-	-fopenmp
+	-fopenmp 
 #	$(mpi_library) -fopenmp 
 # $(openmp_library)
  # -lomp #$(cernroot_library) 

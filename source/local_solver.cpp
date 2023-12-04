@@ -8,7 +8,12 @@ void sbp_sat::x2::make_local_solver(
     sol = KSP();
     KSPCreate(PETSC_COMM_WORLD, &sol); 
     KSPSetOperators(sol, mat, mat);
-    KSPSetFromOptions(sol);
+    //KSPSetFromOptions(sol);
+    KSPSetType(sol, KSPPREONLY);
+    PC pc;
+    KSPGetPC(sol, &pc);
+    PCSetType(pc, PCLU);
+    KSPSetPC(sol, pc);
     KSPSetUp(sol);
 
     // Call once to factorize

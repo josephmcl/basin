@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <papi.h>
 
 // Top level solver for D - FT * M \ F 
 /*
@@ -202,7 +203,7 @@ void sbp_sat::x2::compute_MF_sliced(
   std::vector<KSP>          const &explicit_solvers, 
   std::vector<petsc_vector> const &F_sliced) {
 
-  // #pragma omp parallel for num_threads(4) private(F_sliced)
+  #pragma omp parallel for num_threads(4) private(F_sliced)
   for (std::size_t i = 0; i != explicit_solvers.size(); ++i) {
     for (std::size_t j = 0; j != F_sliced.size(); ++j) { 
       if (j % explicit_solvers.size() == i) {
@@ -371,7 +372,33 @@ void sbp_sat::x2::compute_λA_reduced(
 
   // std::cout << "limit :" << limit << std::endl;
 
-  //int x = 0;
+  
+  /*
+  int eventset=PAPI_NULL;
+  int retval=PAPI_create_eventset(&eventset);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error creating eventset! %s\n",
+          PAPI_strerror(retval));
+  }
+  retval=PAPI_add_named_event(eventset,"PAPI_L3_TCM");
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error adding PAPI_L3_TCW: %s\n",
+      PAPI_strerror(retval));
+  }
+
+  long long kount = 0;
+  long long count = 0;
+
+  PAPI_reset(eventset);
+  retval=PAPI_start(eventset);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error starting CUDA: %s\n",
+      PAPI_strerror(retval));
+  }
+  */
+  
+  
+
   #pragma omp parallel for private(i, j, k, findex, mindex) num_threads(sbp.n_threads)
   for (std::size_t index = 0; index != limit; ++index) {
     i = index / (sbp.n_interfaces * sbp.n_blocks);
@@ -388,15 +415,44 @@ void sbp_sat::x2::compute_λA_reduced(
       mindex = (r * 4) + F_symbols[k][j] - 1;
       double v;
 
-      for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
-        for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+      /*
+      std::vector<double> vz;
+      std::vector<int> vzn, vzm; 
+      vz.resize(sbp.n * sbp.n);
+      vzn.resize(sbp.n);
+      vzm.resize(sbp.n);
+
+      for (std::size_t ii = 0; ii != sbp.n; ++ii) {
+        vzn[ii] = i * sbp.n + ii;
+        vzm[ii] = j * sbp.n + ii;
+      }*/
+
+      for (std::size_t ii = 0; ii != sbp.n; ++ii) {
+        for (std::size_t jj = 0; jj != sbp.n; ++jj) {
           v = 0.;
           VecTDot(F[findex][ii], MF[mindex][jj], &v);
           MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+          // vz[ii * sbp.n + jj] = v;
+          //if (v != 0) kount += 1;
         }
       } 
+
+      // MatSetValues(λA, sbp.n, &vzn[0], sbp.n, &vzm[0], &vz[0], ADD_VALUES);
     }
   }
+
+  
+  /*
+  retval=PAPI_stop(eventset,&count);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error stopping:  %s\n",
+                          PAPI_strerror(retval));
+  }
+  else {
+        printf("Measured %lld events \n",count);
+        //printf("Measured %lld events \n",kount);
+  }*/
+  
 
   finalize<fw>(λA);
   MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
@@ -404,7 +460,115 @@ void sbp_sat::x2::compute_λA_reduced(
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
 }
 
-void compute_λA_gemm( 
+void sbp_sat::x2::
+compute_λA_flat(
+  petsc_matrix           &λA, 
+  petsc_matrix     const &D, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  std::vector<std::size_t>  const &interface_list,
+  components       const &sbp) {
+
+  std::size_t findex, mindex, i, j;
+  double v;
+
+  const std::size_t limit = interface_list.size();
+  
+  /*
+  int eventset=PAPI_NULL;
+  int retval=PAPI_create_eventset(&eventset);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error creating eventset! %s\n",
+          PAPI_strerror(retval));
+  }
+  retval=PAPI_add_named_event(eventset,"PAPI_SP_OPS");
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error adding PAPI_SP_OPS: %s\n",
+      PAPI_strerror(retval));
+  }
+
+  long long count;
+
+  PAPI_reset(eventset);
+  retval=PAPI_start(eventset);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error starting CUDA: %s\n",
+      PAPI_strerror(retval));
+  }
+  */
+
+  // std::cout << "threads " << sbp.n_threads << std::endl;
+
+  #pragma omp parallel for private(i, j, findex, mindex, v) num_threads(sbp.n_threads)
+  for (std::size_t index = 0; index < limit; index += 4) {
+    i = interface_list[index];
+    j = interface_list[index + 1];
+    findex = interface_list[index + 2];
+    mindex = interface_list[index + 3];
+    for (std::size_t ii = 0; ii != F[findex].size(); ++ii) {
+      for (std::size_t jj = 0; jj != MF[mindex].size(); ++jj) {
+        v = 0.;
+        VecTDot(F[findex][ii], MF[mindex][jj], &v);
+        MatSetValue(λA, i * sbp.n + ii, j * sbp.n + jj, v, ADD_VALUES); 
+      }
+    } 
+  }
+  
+  /*
+  retval=PAPI_stop(eventset,&count);
+  if (retval!=PAPI_OK) {
+    fprintf(stderr,"Error stopping:  %s\n",
+                          PAPI_strerror(retval));
+  }
+  else {
+        printf("Measured %lld flops\n",count);
+  }
+  */
+
+  finalize<fw>(λA);
+  MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
+  // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
+  // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+}
+
+//
+//
+//
+void sbp_sat::x2::make_interface_list(
+  std::vector<std::size_t>       &interface_list, 
+  vv<std::size_t>          const &F_symbols,
+  vv<std::size_t>          const &FT_symbols,
+  components               const &sbp) {
+
+  std::size_t findex;
+  std::size_t mindex;
+
+  for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
+    for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
+      for (std::size_t k = 0; k != sbp.n_blocks; ++k) {
+        if (F_symbols[k][i] > 0 && FT_symbols[j][k] > 0) {
+
+          findex = FT_symbols[i][k] - 1;
+          auto r = k % sbp.n_blocks_dim == 0 ? 0 
+                : k % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
+                : 1;
+          mindex = (r * 4) + F_symbols[k][j] - 1;
+
+          interface_list.push_back(i);
+          interface_list.push_back(j);
+          interface_list.push_back(findex);
+          interface_list.push_back(mindex);
+
+        }
+      }
+    }
+  }
+}
+
+
+
+
+void sbp_sat::x2::compute_λA_gemm( 
   petsc_matrix                   &λA, 
   petsc_matrix              const &D, 
   std::vector<petsc_matrix> const &F, 
@@ -412,6 +576,8 @@ void compute_λA_gemm(
   vv<std::size_t>           const &F_symbols,
   vv<std::size_t>           const &FT_symbols,
   components                const &sbp) {
+
+  /*
 
   std::size_t findex;
   std::size_t mindex;
@@ -458,12 +624,14 @@ void compute_λA_gemm(
         }
       } 
     }
+    
   }
 
   finalize<fw>(λA);
   MatAYPX(λA, -1, D, DIFFERENT_NONZERO_PATTERN);
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
   // MatView(λA, PETSC_VIEWER_STDOUT_SELF);
+  */
 }
 
 void sbp_sat::x2::initialize_λA(

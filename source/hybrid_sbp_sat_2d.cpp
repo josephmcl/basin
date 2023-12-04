@@ -294,15 +294,40 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed D." << std::endl;  
 
+
+  // PetscLogEvent Delta_A;
+  // PetscLogEventRegister("Delta A", 0, &Delta_A);
+  // PetscLogEventBegin(Delta_A, 0, 0, 0, 0);
+
+  // PetscMemoryView(PETSC_VIEWER_STDOUT_WORLD, "test");
+  // double mem;
+  // PetscMemoryGetCurrentUsage(&mem);
+  // std::cout << "mem " << mem << std::endl;
+
+
+  std::vector<std::size_t> interface_list;
+  make_interface_list(interface_list, F_symbols, FT_symbols, sbp);
+
   // Compute λA.
-  begin = timing::read();
+  
+  //double flopsb, flopse;
+  //PetscGetFlops(&flopsb);
   petsc_matrix λA; 
   initialize_λA(λA, sbp);
+  begin = timing::read();
   compute_λA_reduced(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+  // compute_λA_flat(λA, D, f, MF, interface_list, sbp);
+  //PetscGetFlops(&flopse);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+  //logging::out << std::setw(14) << std::fixed << flopse - flopsb 
+  //  << " FLOPs" << std::endl;
 
+
+
+  //
+  //
   // Solve Mx = g system
   begin = timing::read();
   std::vector<petsc_vector> Mg;
@@ -312,6 +337,8 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Solved Mx = g." << std::endl;
 
+  //
+  //
   // Compute λb
   begin = timing::read();
   petsc_vector λb;
@@ -332,6 +359,12 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   KSPSolve(trace_solver, λb, λ);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin
+    << " s # " << "Set up λA." << std::endl;
+    
+  begin = timing::read();
+  KSPSolve(trace_solver, λb, λ);
+  end = timing::read();
+  logging::out << std::setw(14) << std::fixed << end - begin
     << " s # " << "Computed λ (λA \\ λb)." << std::endl;
 
   // Compute the solution 
@@ -345,9 +378,10 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &g_explicit);
   {
     const double *values;
-    std::vector<int> writei; writei.resize(sbp.n * sbp.n);
-    #pragma omp parallel for collapse(1) private(values) num_threads(sbp.n_threads)
+    std::vector<int> writei; 
+    #pragma omp parallel for collapse(1) private(values, writei) num_threads(sbp.n_threads)
     for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
+      writei.resize(sbp.n * sbp.n);
       for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         writei[i] = sbp.n * sbp.n * block + i;
       }
@@ -397,6 +431,11 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin
     << " s # " << "Computed u (M \\ b)." << std::endl;
+
+
+  //for (auto &e : x) 
+  //  VecView(e, PETSC_VIEWER_STDOUT_SELF);
+
 
   // Clean up everything. 
   for (auto &e: M) destroy<fw>(e);

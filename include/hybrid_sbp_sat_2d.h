@@ -704,5 +704,20 @@ void print_convergence(
   petsc_vector &exact, 
   components const &sbp); 
 
+
+void make_interface_list(
+  std::vector<std::size_t>       &interface_list, 
+  vv<std::size_t>          const &F_symbols,
+  vv<std::size_t>          const &FT_symbols,
+  components               const &sbp);
+
+void compute_λA_flat(
+  petsc_matrix           &λA, 
+  petsc_matrix     const &D, 
+  vv<petsc_vector> const &F, 
+  vv<petsc_vector> const &MF, 
+  std::vector<std::size_t> const &interface_list,
+  components       const &sbp);
+
 }; /* namespace sbp_sat::x2 */
 }; /* namespace sbp_sat     */
