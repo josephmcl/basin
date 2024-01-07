@@ -7,9 +7,11 @@ int min(int x, int y) {
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "mkl.h"
+// #include "mkl.h"
 
-int main() {
+int main_alt() {
+
+  /*
     double *A, *B, *C;
     int m, n, k, i, j;
     double alpha, beta;
@@ -85,4 +87,7 @@ int main() {
 
     printf (" Example completed. \n\n");
     return 0;
+
+    */
+   return 0;
 }

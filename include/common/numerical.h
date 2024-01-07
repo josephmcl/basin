@@ -9,10 +9,6 @@
 #include <tuple>
 
 #include "definitions.h"
-#include "ranges.h"
-
-#include <petscsys.h>
-#include <petscmat.h> 
 
 namespace numerical {
 
@@ -41,7 +37,6 @@ struct operators {
         std::vector<ℝ> h, hi;
         std::vector<std::vector<ℝ>> top, bottom;
         std::vector<ℝ> top_boundary_data, bot_boundary_data;
-        Mat _petsc_repr;
         sbp(ℤ const size, ℤ const order, ℝ const left, ℝ const right);
         
         /*  Given a const reference to an index, return a reference to 

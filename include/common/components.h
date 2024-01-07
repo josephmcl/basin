@@ -10,27 +10,17 @@
 #include <functional>
 
 #include "definitions.h"
-#include "ranges.h"
-#include "solve.h"
 #include "numerical.h"
-#include "linalg.h"
+#include "csr.h"
 
 /* petsc headers */
 
-namespace sbp_sat { 
+namespace sbp_sat_2d { 
 
   using real_t = type::real_t; 
   using vector_t = std::vector<real_t>;
   auto const π = std::numbers::pi_v<real_t>;
   auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
-  using petsc_matrix = Mat;
-  using petsc_vector = Vec;
-  using petsc_solver = KSP;
-
-  namespace x2 {
-
-    using namespace linalg;
-    auto constexpr fw = framework::petsc;
 
   // Make and store all the components needed to do SBP-SAT things. 
   class components {
@@ -54,6 +44,7 @@ namespace sbp_sat {
 
     std::size_t n_threads;
 
+    /*
     petsc_matrix hl;
     petsc_matrix hx, hy;
     petsc_matrix h1x, h1y;
@@ -70,5 +61,6 @@ namespace sbp_sat {
     void make_h1();
     void make_hl();
     void make_d2();
+    */
 	};
-}}; // namespace 
+}; // namespace sbp_sat_2d

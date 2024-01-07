@@ -44,9 +44,9 @@ make_bs() {
         -2. / span * (n - 1),   
     (1./2.) / span * (n - 1)};
   
+  /*
   MatCreateSeqAIJ(PETSC_COMM_SELF, n2, n2, 3, nullptr, &bsx);
   MatCreateSeqAIJ(PETSC_COMM_SELF, n2, n2, 3, nullptr, &bsy);
-  
   for (std::size_t i = 0; i < bs.size(); ++i) {
     for (std::size_t j = 0; j < n; ++j) {
       set_matrix_value<fw>(bsx, j, (i * n) + j, bs[i]);
@@ -56,9 +56,22 @@ make_bs() {
       set_matrix_value<fw>(bsy, (j * n) + n - 1, (j * n) + n - i - 1, bs[i]);
     }
   }  
-  
   finalize<fw>(bsx);
   finalize<fw>(bsy);
+  */
+
+  
+  bsx = csr<double>{n2, n2};
+  bsy = csr<double>{n2, n2};
+  for (std::size_t i = 0; i < bs.size(); ++i) {
+    for (std::size_t j = 0; j < n; ++j) {
+      bsx(bs[i], j, (i * n) + j);
+      bsx(bs[i], n2 - 1 - j, n2 - 1 - (i * n) - j);
+
+      bsy(bs[i], j * n, j * n + i);
+      bsy(bs[i], (j * n) + n - 1, (j * n) + n - i - 1);
+    }
+  }  
 }
 
 
@@ -67,26 +80,31 @@ make_l() {
 
   std::size_t const n2 = n * n;
 
-  MatCreateSeqAIJ(PETSC_COMM_SELF, n, n2, 1, nullptr, &ln);
-  MatCreateSeqAIJ(PETSC_COMM_SELF, n, n2, 1, nullptr, &ls);
-  MatCreateSeqAIJ(PETSC_COMM_SELF, n, n2, 1, nullptr, &le);
-  MatCreateSeqAIJ(PETSC_COMM_SELF, n, n2, 1, nullptr, &lw);
+  ln = csr<double>{n, n2};
+  ls = csr<double>{n, n2};
+  le = csr<double>{n, n2};
+  lw = csr<double>{n, n2};
 
   for (std::size_t i = 0; i != n; ++i) {
-    MatSetValue(ls, i, n * i,  1., ADD_VALUES);
-    MatSetValue(ln, i, n * i + (n - 1),  1., ADD_VALUES);
-    MatSetValue(le, i, n * (n - 1) + i, 1., ADD_VALUES);
-    MatSetValue(lw, i, i, 1., ADD_VALUES);
+    ls(1., i, n * i);
+    ln(1., i, n * i + (n - 1));
+    le(1., i, n * (n - 1) + i);
+    lw(1., i, i);
+    //MatSetValue(ls, i, n * i,  1., ADD_VALUES);
+    //MatSetValue(ln, i, n * i + (n - 1),  1., ADD_VALUES);
+    //MatSetValue(le, i, n * (n - 1) + i, 1., ADD_VALUES);
+    //MatSetValue(lw, i, i, 1., ADD_VALUES);
   }
 
+  /*
   finalize<fw>(ln);
   finalize<fw>(ls);
   finalize<fw>(le);
-  finalize<fw>(lw);
+  finalize<fw>(lw);*/
 }
 
 void sbp_sat::x2::components::
- make_h1() { 
+make_h1() { 
 
   MatCreateSeqAIJ(PETSC_COMM_SELF, n, n, 1, nullptr, &h1x);
   MatCreateSeqAIJ(PETSC_COMM_SELF, n, n, 1, nullptr, &h1y);

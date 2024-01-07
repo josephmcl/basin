@@ -1,46 +1,100 @@
 #include "compute_lambda_matrix.h"
 
-auto poisson_2d::compute_lambda_matrix(
-        double     &*lambdaA,
+#include <stdio.h>
+#include <stdlib.h>
+#include "mkl.h"
+
+#include <iostream>
+
+#define min(x,y) (((x) < (y)) ? (x) : (y))
+
+
+auto compute_lambda_matrix(/*
+        double     **lambdaA,
   const double     **F,
   const double     **MinvFT,
   const std::size_t n_batch,
-  const components &sbp) -> void {
+  const components &sbp*/) -> void {
 
-    std::vector m(n_batch), n(n_batch), k(n_batch);
-    for (std::size_t i = 0; i != n_batch; ++i) {
-        m[i] = sbp.n * sbp.n;
-        n[i] = sbp.n;
-        k[i] = sbp.n;
+    double *A, *B, *C;
+    int m, n, k, i, j;
+    double alpha, beta;
+
+    std::cout << "apple" << std::endl;
+
+    printf ("\n This example computes real matrix C=alpha*A*B+beta*C using \n"
+            " Intel(R) MKL function dgemm, where A, B, and  C are matrices and \n"
+            " alpha and beta are double precision scalars\n\n");
+
+    m = 2000, k = 200, n = 1000;
+    printf (" Initializing data for matrix multiplication C=A*B for matrix \n"
+            " A(%ix%i) and matrix B(%ix%i)\n\n", m, k, k, n);
+    alpha = 1.0; beta = 0.0;
+
+    printf (" Allocating memory for matrices aligned on 64-byte boundary for better \n"
+            " performance \n\n");
+    A = (double *)mkl_malloc( m*k*sizeof( double ), 64 );
+    B = (double *)mkl_malloc( k*n*sizeof( double ), 64 );
+    C = (double *)mkl_malloc( m*n*sizeof( double ), 64 );
+    if (A == NULL || B == NULL || C == NULL) {
+      printf( "\n ERROR: Can't allocate memory for matrices. Aborting... \n\n");
+      mkl_free(A);
+      mkl_free(B);
+      mkl_free(C);
+      return;
     }
 
+    printf (" Intializing matrix data \n\n");
+    for (i = 0; i < (m*k); i++) {
+        A[i] = (double)(i+1);
+    }
 
-    void cblas_dgemm_batch (
-        const CBLAS_LAYOUT Layout, 
-        const CBLAS_TRANSPOSE* transa_array, 
-        const CBLAS_TRANSPOSE* transb_array, 
-        const MKL_INT* m_array, 
-        const MKL_INT* n_array, 
-        const MKL_INT* k_array, 
-        const double* alpha_array, 
-        const double **a_array, 
-        const MKL_INT* lda_array, 
-        const double **b_array, 
-        const MKL_INT* ldb_array, 
-        const double* beta_array, 
-        double **c_array, 
-        const MKL_INT* ldc_array, 
-        const MKL_INT group_count, 
-        const MKL_INT* group_size);
+    for (i = 0; i < (k*n); i++) {
+        B[i] = (double)(-i-1);
+    }
 
-    /* mkl batch gemm. */
-    cblas_dgemm_batch(
-        CblasNoTrans,
-        t_array,
-        t_array,
-        
+    for (i = 0; i < (m*n); i++) {
+        C[i] = 0.0;
+    }
 
+    printf (" Computing matrix product using Intel(R) MKL dgemm function via CBLAS interface \n\n");
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 
+                m, n, k, alpha, A, k, B, n, beta, C, n);
+    printf ("\n Computations completed.\n\n");
 
+    printf (" Top left corner of matrix A: \n");
+    for (i=0; i<min(m,6); i++) {
+      for (j=0; j<min(k,6); j++) {
+        printf ("%12.0f", A[j+i*k]);
+      }
+      printf ("\n");
+    }
+
+    printf ("\n Top left corner of matrix B: \n");
+    for (i=0; i<min(k,6); i++) {
+      for (j=0; j<min(n,6); j++) {
+        printf ("%12.0f", B[j+i*n]);
+      }
+      printf ("\n");
+    }
+    
+    printf ("\n Top left corner of matrix C: \n");
+    for (i=0; i<min(m,6); i++) {
+      for (j=0; j<min(n,6); j++) {
+        printf ("%12.5G", C[j+i*n]);
+      }
+      printf ("\n");
+    }
+
+    printf ("\n Deallocating memory \n\n");
+    mkl_free(A);
+    mkl_free(B);
+    mkl_free(C);
+
+    printf (" Example completed. \n\n");
 
     return;
 }
+
+
+

@@ -10,7 +10,7 @@ mkl_target = lab-mkl
 # cc = g++-12
 # cc = g++-13
 
-cc = ${CC}
+cc = g++ 
 
 source_ext = cpp
 header_directory = include
@@ -59,8 +59,7 @@ objects_and_test_objects += $(test_objects)
 
 rm = rm -f
 
-gccflags = -std=c++2a -Wall -Wpedantic -g -O3 \
-		   -fconcepts-diagnostics-depth=3 -finput-charset=UTF-8 -fopenmp
+gccflags = -std=c++2a -Wall -Wpedantic -g -O3 -finput-charset=UTF-8 
 
 compiler_flags := $(gccflags) 
 
@@ -71,7 +70,7 @@ cernroot_include := -I${CERN_ROOT_INCLUDE}
 openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include 
 mkl_include      := -I${MKLROOT}/include 
 
-includes := -I./$(header_directory) $(petsc_include) $(mkl_include)
+includes := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include) 
 #  \
 #	$(openmpi_include) 
 # $(openmp_include)
@@ -86,19 +85,24 @@ pthread_library := -lpthread
 petsc_library := ${PETSC_LIBRARY}
 mpi_library := /opt/homebrew/Cellar/open-mpi/4.1.5/lib/libmpi.dylib
 openmp_library := /opt/homebrew/Cellar/libomp/16.0.4/lib/libomp.dylib
-mkl_library := -L${MKLROOT}/lib/intel64 -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lm
+mkl_library := /gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-mkl-2023.1.0-zq7rmpuigpkajdv7mkddhublalbxjbhy/mkl/2023.1.0/lib
+#-lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lm 
 
  # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
-libraries := $(petsc_library) $(pthread_library) $(mkl_library) \
-	-fopenmp
+libraries := $(petsc_library) $(pthread_library) $(mkl_library) 
 #	$(mpi_library) -fopenmp 
 # $(openmp_library)
  # -lomp #$(cernroot_library) 
 
-# More MKL Implementation stuff
-mkl_impl_includes  := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include)
-mkl_impl_libraries := $(pthread_library) $(mkl_library)
+oneapi_root := /gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-compilers-2023.1.0-3d5dbsmapp7perx5ikhy4b2dwpkoiz7w/compiler/2023.1.0/linux/include
+oneapi_sycl := $(oneapi_root)/sycl/
+oneapi_lib := -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-compilers-2023.1.0-3d5dbsmapp7perx5ikhy4b2dwpkoiz7w/compiler/2023.1.0/linux/lib/
 
+oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
+
+# More MKL Implementation stuff
+mkl_impl_includes  := -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
+mkl_impl_libraries := $(pthread_library) -L$(mkl_library) -Wl,--no-as-needed -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -lpthread -lm -ldl -fopenmp # $(oneapi_lib) 
 define speaker
 	@echo [make:$$PPID] $(1)
 	@$(1)
@@ -119,7 +123,7 @@ $(binary_directory)/$(test_target): $(objects) $(test_objects)
 
 $(objects): $(object_directory)/%.o: $(source_directory)/%.$(source_ext) 
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ -fopenmp $(includes)) 
+	$(cc) $(compiler_flags) -c $< -o $@ $(includes)) 
 
 $(mkl_impl_object_directory_absent):
 	$(call speaker, $(mkdir) $(mkl_impl_object_directory))
@@ -129,16 +133,12 @@ $(test_objects): $(object_directory)/%.o : $(test_directory)/%.cpp
 	$(cc) $(compiler_flags) -c $< -o $@ $(test_includes)) 
 
 $(binary_directory)/$(mkl_target): $(mkl_impl_objects) 
-	@echo $(mkl_impl_object_directory)
-	@echo $(mkl_impl_header_directory)
-	@echo $(mkl_impl_sources)
-	@echo $(mkl_impl_objects)
 	$(call speaker,\
 	$(cc) $(mkl_impl_objects) -o $@ $(mkl_impl_libraries))
-
+ 
 $(mkl_impl_objects): $(mkl_impl_object_directory)/%.o: $(mkl_impl_source_directory)/%.$(source_ext) $(mkl_impl_object_directory_absent)
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ -fopenmp $(mkl_impl_includes)) 
+	$(cc) $(compiler_flags) -c $< -o $@ $(mkl_impl_includes)) 
 
 .PHONY: petsc 
 petsc: $(binary_directory)/$(target)
