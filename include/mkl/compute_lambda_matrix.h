@@ -5,8 +5,6 @@
 #include "mkl.h"
 #include <vector>
 
-using namespace sbp_sat_2d;
-
 auto compute_lambda_matrix(/*
         double     **lambdaA,
   const double     **F,

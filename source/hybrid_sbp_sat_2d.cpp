@@ -102,6 +102,16 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     std::cout << std::endl;
   }
 
+  auto sbp = components{n, span};
+
+  sbp.τ = 42.; // hard code these coeffs for now. 
+  sbp.β = 1.;
+
+  sbp.n_blocks = n_blocks;         // additional non sbp-sat info. but  
+  sbp.n_interfaces = n_interfaces; // useful to have along. 
+  sbp.n_blocks_dim = l_blocks;
+  sbp.n_threads = static_cast<std::size_t>(omp_get_max_threads());
+
   /*
   interfaces = {
     {0, 1, 0, 3, 0, 0, 0, 0, 0}, 

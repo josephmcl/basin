@@ -5,12 +5,12 @@
 include .env
 
 target = main
-mkl_target = lab-mkl
+mkl_target = lab-mkl 
 
 # cc = g++-12
 # cc = g++-13
 
-cc = g++ 
+cc = g++ -mkl -DMKL
 
 source_ext = cpp
 header_directory = include
@@ -68,7 +68,7 @@ petsc_include    := -I${PETSC_INCLUDE}
 openmpi_include  := -I${OPENMPI_INCLUDE}
 cernroot_include := -I${CERN_ROOT_INCLUDE}
 openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include 
-mkl_include      := -I${MKLROOT}/include 
+mkl_include      := -m64 -I${MKLROOT}/include 
 
 includes := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include) 
 #  \
@@ -102,7 +102,7 @@ oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
 
 # More MKL Implementation stuff
 mkl_impl_includes  := -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
-mkl_impl_libraries := $(pthread_library) -L$(mkl_library) -Wl,--no-as-needed -lmkl_gf_lp64 -lmkl_gnu_thread -lmkl_core -lpthread -lm -ldl -fopenmp # $(oneapi_lib) 
+mkl_impl_libraries := $(pthread_library) -L$(mkl_library) -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lpthread -lm -ldl -lgomp -fopenmp # $(oneapi_lib) 
 define speaker
 	@echo [make:$$PPID] $(1)
 	@$(1)

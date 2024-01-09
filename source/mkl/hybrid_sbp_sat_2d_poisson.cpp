@@ -1,4 +1,3 @@
-#include "infrastructure.h"
 #include "poisson_2d.h"
 
 #include "csr.h"
@@ -11,10 +10,10 @@ int main(int argc, char **argv) {
     // cblas_dgemm_batch;
 
   /* Initialize libraries needed for simulation. */
-  if (!infrastructure::initialize(argc, argv)) exit(-1);; { 
 
-    // poisson_2d::problem(0,0);
+    poisson_2d::problem(4,3);
 
+    /*
     csr<int> x;
 
     x = csr<int>{4,6};
@@ -41,12 +40,9 @@ int main(int argc, char **argv) {
       std::cout << e << " ";
     } std::cout << std::endl;
 
-    /**/
-
-
     std::cout << x.nnz() << std::endl;
+        */
 
 
-  } infrastructure::cleanup(); return 0;
 
 }
