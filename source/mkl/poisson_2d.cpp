@@ -73,12 +73,30 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     compute_g(&g, B, boundary_solution, sources, boundary_order_map, 
     boundary_data_map, sbp); 
 
+    vv<std::size_t> F_symbols(n_blocks,           // rows 
+    std::vector<std::size_t>(n_interfaces, 0)); // columns
+    vv<std::size_t> FT_symbols(n_interfaces,      // rows
+    std::vector<std::size_t>(n_blocks, 0));     // columns
+
+    compute_f_symbols(F_symbols, FT_symbols, interfaces, sbp);
+
+
+    std::cout << "Square hybrid specs:" << std::endl 
+    << " | local problem size: " << n_points_x << " x " << n_points_x 
+    << std::endl << " | span: " << span 
+    << std::endl << " | total blocks: " << l_blocks << " x " << l_blocks 
+      << " (" << n_blocks << ") "
+    << std::endl << " | total interfaces: " << n_interfaces 
+    << std::endl << " | threads: " << sbp.n_threads 
+    << std::endl;
+
     
     // compute_lambda_matrix();
     
     // Cleanup everything we allocated.
     mkl_free(boundary_solution);
     mkl_free(sources);
+    mkl_free(g);
 
     return;
 }

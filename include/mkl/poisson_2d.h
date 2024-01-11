@@ -9,6 +9,7 @@
 #include "compute_boundary_solution.h"
 #include "compute_sources.h"
 #include "compute_g.h"
+#include "compute_f_symbols.h"
 
 #include "omp.h"
 #include "mkl.h"
