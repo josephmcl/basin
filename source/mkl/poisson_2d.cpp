@@ -43,10 +43,42 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
 
     // Compute flux components used by b. 
-    std::vector<csr<real_t>> B;
+    std::vector<sparse_matrix_t> B;
     compute_b(B, sbp);  
 
+    // Generate ranges for the x and y of each block, given the number of 
+    // blocks in each dimension.
+    auto block_grid = range_t(0, 1., l_blocks + 1);
+    std::vector<range_t> grids; 
+    for (std::size_t i = 0; i != block_grid.size() - 1; ++i)  {
+        grids.push_back(range_t(*block_grid[i], *block_grid[i + 1], n));
+    }
+
+    // Generate the solution at the boundary. This implementation generates 
+    // vectors from range functions. 
+    real_t *boundary_solution;
+    compute_boundary_solution(  
+        &boundary_solution, grids, {gw, ge, gs, gn}, {0., 1., 0., 1.});
+
+    real_t *sources;
+    compute_sources(&sources, grids, source_function);
+
+    vv<std::size_t> boundary_data_map;
+    vv<std::size_t> boundary_order_map;
+    make_boundary_maps(boundary_data_map, boundary_order_map, l_blocks);
+
+
+    // Compute the hybrid system g terms. 
+    real_t *g;
+    compute_g(&g, B, boundary_solution, sources, boundary_order_map, 
+    boundary_data_map, sbp); 
+
+    
     // compute_lambda_matrix();
+    
+    // Cleanup everything we allocated.
+    mkl_free(boundary_solution);
+    mkl_free(sources);
 
     return;
 }

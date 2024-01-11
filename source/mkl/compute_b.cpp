@@ -2,7 +2,7 @@
 
 
 void compute_b(
-    std::vector<csr<real_t>>        &  B, 
+    std::vector<sparse_matrix_t>    &  B, 
     components                      &sbp) {
 
     B.resize(8); // 4 for first-order 4 for second-order. Some may not be
@@ -30,7 +30,7 @@ void compute_b(
     North: H_x * (τ * LN' - β * BS_y' * LN')  
 */
 void compute_b1(
-    csr<real_t>        & B, 
+    sparse_matrix_t    & B, 
     csr<real_t>        & H, 
     real_t       const   τ, 
     csr<real_t>        & L, 
@@ -38,7 +38,63 @@ void compute_b1(
     csr<real_t>        &BS,
     std::size_t  const   n) {
     
+    sparse_matrix_t bs, l, temp1, temp2, lb, h;
 
+    auto status = BS.mkl(&bs, β);
+    mkl_sparse_status(status);
+
+    status = L.mkl(&l);
+    mkl_sparse_status(status);
+
+    matrix_descr da, db;
+
+    da.type = SPARSE_MATRIX_TYPE_GENERAL;
+    da.mode = SPARSE_FILL_MODE_UPPER;
+	da.diag = SPARSE_DIAG_NON_UNIT;
+    db.type = SPARSE_MATRIX_TYPE_GENERAL;
+    db.mode = SPARSE_FILL_MODE_UPPER;
+	db.diag = SPARSE_DIAG_NON_UNIT;
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_TRANSPOSE, da, bs,
+        SPARSE_OPERATION_TRANSPOSE, db, l,
+        SPARSE_STAGE_FULL_MULT, &temp1);
+    mkl_sparse_status(status);
+
+    status = L.mkl(&lb, τ);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_d_add(
+        SPARSE_OPERATION_TRANSPOSE, lb, -1., 
+        temp1, &temp2);
+    mkl_sparse_status(status);
+
+    status = H.mkl(&h, -1);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, h,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, temp2,
+        SPARSE_STAGE_FULL_MULT, &B);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(bs);
+    mkl_sparse_status(status);
+    
+    status = mkl_sparse_destroy(l);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(temp1);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(temp2);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(lb);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(h);
+    mkl_sparse_status(status);
     
 
     /*
@@ -85,7 +141,7 @@ void compute_b1(
     South: H_x * (β * LS' - 1/τ * BS_y' * LS')
     North: H_x * (β * LN' - 1/τ * BS_y' * LN')  */
 void compute_b2(
-    csr<real_t>        & B, 
+    sparse_matrix_t    & B, 
     csr<real_t>        & H, 
     real_t       const   τ, 
     csr<real_t>        & L, 
@@ -93,31 +149,13 @@ void compute_b2(
     csr<real_t>        &BS,
     std::size_t  const   n) {
     
-    sparse_matrix_t bs, l, temp;
+    sparse_matrix_t bs, l, temp1, temp2, lb, h;
 
-    std::cout << "1" << std::endl;
+    auto status = BS.mkl(&bs, 1. / τ);
+    mkl_sparse_status(status);
 
-    auto rv = BS.mkl(&bs);
-
-    std::cout << ((rv == SPARSE_STATUS_SUCCESS)? ":)": ":(") << std::endl;
-    std::cout << BS.rows() << ", " << BS.cols() << std::endl;
-
-    rv = L.mkl(&l);
-    std::cout << ((rv == SPARSE_STATUS_SUCCESS)? ":)": ":(") << std::endl;
-
-    std::cout << L.rows() << ", " << L.cols() << std::endl;
-
-
-    /* sparse_status_t mkl_sparse_sp2m (
-        const sparse_operation_t transA, 
-        const struct matrix_descr descrA, 
-        const sparse_matrix_t A, 
-        const sparse_operation_t transB, 
-        const struct matrix_descr descrB, 
-        const sparse_matrix_t B,
-         const sparse_request_t request, 
-         sparse_matrix_t *C);
-    */
+    status = L.mkl(&l);
+    mkl_sparse_status(status);
 
     matrix_descr da, db;
 
@@ -127,19 +165,49 @@ void compute_b2(
     db.type = SPARSE_MATRIX_TYPE_GENERAL;
     db.mode = SPARSE_FILL_MODE_UPPER;
 	db.diag = SPARSE_DIAG_NON_UNIT;
-    // da.mode = SPARSE_MATRIX_TYPE_GENERAL;
-    // da.diag = SPARSE_MATRIX_TYPE_GENERAL;
 
-    std::cout << "u" << std::endl;
-
-    rv = mkl_sparse_sp2m(
+    status = mkl_sparse_sp2m(
         SPARSE_OPERATION_TRANSPOSE, da, bs,
         SPARSE_OPERATION_TRANSPOSE, db, l,
-        SPARSE_STAGE_FULL_MULT, &temp);
-    std::cout << ((rv == SPARSE_STATUS_SUCCESS)? ":)": ">:(") << std::endl;
+        SPARSE_STAGE_FULL_MULT, &temp1);
+    mkl_sparse_status(status);
 
-    std::cout << rv << std::endl;
+    status = L.mkl(&lb, β);
+    mkl_sparse_status(status);
 
+    status = mkl_sparse_d_add(
+        SPARSE_OPERATION_TRANSPOSE, lb, -1., 
+        temp1, &temp2);
+    mkl_sparse_status(status);
+
+    status = H.mkl(&h, -1);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, h,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, temp2,
+        SPARSE_STAGE_FULL_MULT, &B);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(bs);
+    mkl_sparse_status(status);
+    
+    status = mkl_sparse_destroy(l);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(temp1);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(temp2);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(lb);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(h);
+    mkl_sparse_status(status);
+
+    /*
     sparse_index_base_t i;
     MKL_INT r, c, *rs, *re, *ci;
     real_t *v;
@@ -157,8 +225,7 @@ void compute_b2(
     std::cout << std::endl;
     
     std::cout << rs[r] << std::endl;
-    /*
-    for (int i = 0; i < rs[r - 1]; ++i) {
+        for (int i = 0; i < rs[r - 1]; ++i) {
         std::cout << *(ci + i) <<  " ";
     }
     std::cout << std::endl;

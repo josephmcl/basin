@@ -17,6 +17,7 @@ struct csr {
     std::vector<T> v;
     std::vector<MKL_INT> r, c;
     T *vv; MKL_INT *rr, *cc, *ee;
+    bool newed = false;
 
     std::size_t cols() const {
         return m;
@@ -45,12 +46,6 @@ struct csr {
     sparse_status_t mkl(
         sparse_matrix_t *mkls, 
         T alpha = T()) {
-
-        for (auto &e: r)
-            std::cout << e << " ";
-        std::cout << std::endl; 
-        std::cout << nnz() << std::endl; 
-
         
         T *data = val_data();
         std::vector<T> temp;
@@ -61,15 +56,18 @@ struct csr {
             data = &temp[0];
         }
 
-        vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
-        cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
-        rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
-        //ee = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
+        if (!newed) {
+            vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
+            cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
+            rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
+            //ee = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
 
-        std::memcpy(vv, &data[0], sizeof(T) * v.size());
-        std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());
-        std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size());
-        //std::memcpy(ee, &r[1], sizeof(MKL_INT) * r.size());
+            std::memcpy(vv, &data[0], sizeof(T) * v.size());
+            std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());
+            std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size());
+            //std::memcpy(ee, &r[1], sizeof(MKL_INT) * r.size());
+            newed = true;
+        }
 
         auto rv = mkl_sparse_d_create_csr(
             mkls, 
@@ -131,5 +129,12 @@ struct csr {
     csr(): n(0), m(0) { }
     csr(csr const &that) { 
         *this = that;
+    }
+    ~csr() {
+        if (newed) {
+            mkl_free(vv);
+            mkl_free(cc);
+            mkl_free(rr);
+        }
     }
 };
