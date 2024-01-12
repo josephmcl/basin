@@ -90,13 +90,31 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     << std::endl << " | threads: " << sbp.n_threads 
     << std::endl;
 
+    auto M = std::vector<sparse_matrix_t>(3);
+    make_m(&M[0], sbp, {1, 1, 2, 1});
+    make_m(&M[1], sbp, {1, 1, 1, 1});
+    make_m(&M[2], sbp, {1, 1, 1, 2});
     
     // compute_lambda_matrix();
+
+    std::cout << "computing f.. \n";
+    // Compute F components.
+    auto Fsparse = std::vector<sparse_matrix_t>(4);
+    auto Fdense = std::vector<real_t *>(4);
+    compute_f(Fsparse, Fdense, sbp);
+
+    std::cout << "computed f\n";
+    // Compute solve of MX = F.
+    std::vector<real_t *> MF;
+    compute_mf(MF, M, Fdense, sbp);
     
     // Cleanup everything we allocated.
     mkl_free(boundary_solution);
     mkl_free(sources);
     mkl_free(g);
+    for (auto &e: M) mkl_free(e);
+    for (auto &e: Fsparse) mkl_free(e);
+    for (auto &e: Fdense) mkl_free(e);
 
     return;
 }

@@ -16,8 +16,9 @@ struct csr {
     std::size_t n, m;
     std::vector<T> v;
     std::vector<MKL_INT> r, c;
-    T *vv; MKL_INT *rr, *cc, *ee;
-    bool newed = false;
+
+    std::vector<T *> _a;
+    std::vector<MKL_INT *> _b;
 
     std::size_t cols() const {
         return m;
@@ -56,18 +57,18 @@ struct csr {
             data = &temp[0];
         }
 
-        if (!newed) {
-            vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
-            cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
-            rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
-            //ee = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
+        T *vv; MKL_INT *rr, *cc;
+        vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
+        cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
+        rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
 
-            std::memcpy(vv, &data[0], sizeof(T) * v.size());
-            std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());
-            std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size());
-            //std::memcpy(ee, &r[1], sizeof(MKL_INT) * r.size());
-            newed = true;
-        }
+        std::memcpy(vv, &data[0], sizeof(T) * v.size());
+        std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());
+        std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size());
+
+        _a.push_back(vv);
+        _b.push_back(rr);
+        _b.push_back(cc);
 
         auto rv = mkl_sparse_d_create_csr(
             mkls, 
@@ -131,10 +132,11 @@ struct csr {
         *this = that;
     }
     ~csr() {
-        if (newed) {
-            mkl_free(vv);
-            mkl_free(cc);
-            mkl_free(rr);
+        for (auto &e: _a) {
+            MKL_free(e);
+        }
+        for (auto &e: _b) {
+            MKL_free(e);
         }
     }
 };

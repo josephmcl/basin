@@ -1,32 +1,108 @@
-void sbp_sat::x2::make_m(
-  sparse_matrix_t                  &M,
+#include "compute_m.h"
+
+std::size_t constexpr dirichlet = 1;
+std::size_t constexpr neumann   = 2;
+
+void make_m(
+  sparse_matrix_t                  *M,
   components                       &sbp, 
   std::array<std::size_t, 4> const &boundary) {
 
-  petsc_matrix temp1, temp2; 
-  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
-    &temp1);
-  MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
-    &temp2);
-  finalize<fw>(temp1);
-  finalize<fw>(temp2);
+  sparse_matrix_t Mb1, Mb2, Mb3, Mb4;
+  sparse_matrix_t temp1, temp3, temp4, temp5, temp6; 
+  sparse_matrix_t dd2x, dd2y, hhl; 
+  
+  // MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
+  //   &temp1);
+  // MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
+  //   &temp2);
+  // finalize<fw>(temp1);
+  // finalize<fw>(temp2);
 
-  MatAXPY(temp1, 1., sbp.d2x, UNKNOWN_NONZERO_PATTERN);
-  MatAXPY(temp1, 1., sbp.d2y, UNKNOWN_NONZERO_PATTERN);
-  MatAXPY(temp2, -1., sbp.hl, UNKNOWN_NONZERO_PATTERN);
+  matrix_descr da, db;
+  da.type = SPARSE_MATRIX_TYPE_GENERAL;
+  da.mode = SPARSE_FILL_MODE_UPPER;
+	da.diag = SPARSE_DIAG_NON_UNIT;
+  db.type = SPARSE_MATRIX_TYPE_GENERAL;
+  db.mode = SPARSE_FILL_MODE_UPPER;
+	db.diag = SPARSE_DIAG_NON_UNIT;
 
-  MatMatMult(temp2, temp1, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &M);
+  sbp.d2x.mkl(&dd2x);
+  sbp.d2y.mkl(&dd2y);
+  sbp.d2y.mkl(&hhl, -1);
 
-  make_M_boundary(M, sbp, 1, boundary[0]);
-  make_M_boundary(M, sbp, 2, boundary[1]);
-  make_M_boundary(M, sbp, 3, boundary[2]);
-  make_M_boundary(M, sbp, 4, boundary[3]);
+  // MatAXPY(temp1, 1., sbp.d2x, UNKNOWN_NONZERO_PATTERN);
+  // MatAXPY(temp1, 1., sbp.d2y, UNKNOWN_NONZERO_PATTERN);
+  // MatAXPY(temp2, -1., sbp.hl, UNKNOWN_NONZERO_PATTERN);
 
-  finalize<fw>(M);
+  // MatMatMult(temp2, temp1, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &M);
+
+  auto status = mkl_sparse_d_add(
+      SPARSE_OPERATION_NON_TRANSPOSE, dd2x, 1., 
+      dd2y, &temp1);
+  mkl_sparse_status(status);
+
+  status = mkl_sparse_sp2m(
+      SPARSE_OPERATION_NON_TRANSPOSE, da, hhl,
+      SPARSE_OPERATION_TRANSPOSE, db, temp1,
+      SPARSE_STAGE_FULL_MULT, &temp3);
+    mkl_sparse_status(status);
+
+  make_m_boundary(&Mb1, sbp, 1, boundary[0]);
+  make_m_boundary(&Mb2, sbp, 2, boundary[1]);
+  make_m_boundary(&Mb3, sbp, 3, boundary[2]);
+  make_m_boundary(&Mb4, sbp, 4, boundary[3]);
+
+  status = mkl_sparse_d_add(
+      SPARSE_OPERATION_NON_TRANSPOSE, Mb1, 1., 
+      Mb2, &temp4);
+  mkl_sparse_status(status);
+
+  status = mkl_sparse_d_add(
+      SPARSE_OPERATION_NON_TRANSPOSE, Mb3, 1., 
+      Mb4, &temp5);
+  mkl_sparse_status(status);
+
+  status = mkl_sparse_d_add(
+      SPARSE_OPERATION_NON_TRANSPOSE, temp4, 1., 
+      temp5, &temp6);
+  mkl_sparse_status(status);
+
+  status = mkl_sparse_d_add(
+      SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
+      temp6, M);
+  mkl_sparse_status(status);
+
+  status = mkl_sparse_destroy(Mb1);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(Mb2);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(Mb3);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(Mb4);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(temp1);
+  mkl_sparse_status(status);
+  //status = mkl_sparse_destroy(temp2);
+  //mkl_sparse_status(status);
+  status = mkl_sparse_destroy(temp3);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(temp4);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(temp5);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(temp6);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(dd2x);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(dd2y);
+  mkl_sparse_status(status);
+  status = mkl_sparse_destroy(hhl);
+  mkl_sparse_status(status);
 }
 
-void sbp_sat::x2::make_M_boundary(
-  petsc_matrix &M,
+void make_m_boundary(
+  sparse_matrix_t *M,
   components const &sbp, 
   std::size_t const direction,
   std::size_t const boundary) {
@@ -39,6 +115,14 @@ void sbp_sat::x2::make_M_boundary(
   auto H = direction < 3 ? sbp.hy : sbp.hx;
   auto BS = direction < 3 ? sbp.bsx : sbp.bsy;
 
+  matrix_descr da, db;
+  da.type = SPARSE_MATRIX_TYPE_GENERAL;
+  da.mode = SPARSE_FILL_MODE_UPPER;
+	da.diag = SPARSE_DIAG_NON_UNIT;
+  db.type = SPARSE_MATRIX_TYPE_GENERAL;
+  db.mode = SPARSE_FILL_MODE_UPPER;
+	db.diag = SPARSE_DIAG_NON_UNIT;
+
   if (boundary == dirichlet) {
 
     sparse_matrix_t th, bh, l, bs, temp1, temp2, temp3, temp4, temp5;
@@ -48,7 +132,7 @@ void sbp_sat::x2::make_M_boundary(
     // finalize<fw>(LT);
     // finalize<fw>(BST);
 
-    status = H.mkl(&th, sbp.τ);
+    auto status = H.mkl(&th, sbp.τ);
     mkl_sparse_status(status);
 
     status = H.mkl(&bh, sbp.β);
@@ -85,6 +169,7 @@ void sbp_sat::x2::make_M_boundary(
     MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
     */
 
+
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_NON_TRANSPOSE, da, bh,
         SPARSE_OPERATION_TRANSPOSE, db, bs,
@@ -99,13 +184,13 @@ void sbp_sat::x2::make_M_boundary(
 
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_NON_TRANSPOSE, da, temp4,
-        SPARSE_OPERATION_TRANSPOSE, db, l,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, l,
         SPARSE_STAGE_FULL_MULT, &temp5);
     mkl_sparse_status(status);
 
     status = mkl_sparse_d_add(
         SPARSE_OPERATION_NON_TRANSPOSE, temp2, 1., 
-        temp5, &M);
+        temp5, M);
     mkl_sparse_status(status);
 
     // -β*H_y*BS_x'*LW'*LW 
@@ -146,12 +231,12 @@ void sbp_sat::x2::make_M_boundary(
   }
   else {
 
-    sparse_matrix_t h, th, l, bs, temp1, temp2, temp3, temp4, temp5;
+    sparse_matrix_t h, th, l, bs, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
 
-    status = H.mkl(&h);
+    auto status = H.mkl(&h);
     mkl_sparse_status(status);
 
-    status = H.mkl(&th, 1 / sbp.τ);
+    status = H.mkl(&th, -1. / sbp.τ);
     mkl_sparse_status(status);
 
     status = L.mkl(&l);
@@ -160,14 +245,36 @@ void sbp_sat::x2::make_M_boundary(
     status = BS.mkl(&bs);
     mkl_sparse_status(status);
 
-    // TODO
+    // H_x * LN' * LN * BS_y
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, h,
+        SPARSE_OPERATION_TRANSPOSE, db, l,
+        SPARSE_STAGE_FULL_MULT, &temp1);
+    mkl_sparse_status(status);
 
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, temp1,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, l,
+        SPARSE_STAGE_FULL_MULT, &temp2);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, temp2,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, bs,
+        SPARSE_STAGE_FULL_MULT, &temp3);
+    mkl_sparse_status(status);
+    
+
+
+    /*
     MatTranspose(L, MAT_INITIAL_MATRIX, &LT);
     MatTranspose(BS, MAT_INITIAL_MATRIX, &BST);
     finalize<fw>(LT);
     finalize<fw>(BST);
-
-    // H_x * LN' * LN * BS_y
+    */
+    
+    
+    /*
     MatMatMult(H, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp1);
     finalize<fw>(temp1);
     MatMatMult(temp1, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
@@ -175,11 +282,63 @@ void sbp_sat::x2::make_M_boundary(
     MatMatMult(temp2, BS, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp3);
     finalize<fw>(temp3);
     MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
+    */
 
     // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
     // MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
 
     // -1/τ * H_x * BS_y' * LN' * LN * BS_y 
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, th,
+        SPARSE_OPERATION_TRANSPOSE, db, bs,
+        SPARSE_STAGE_FULL_MULT, &temp4);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, temp4,
+        SPARSE_OPERATION_TRANSPOSE, db, l,
+        SPARSE_STAGE_FULL_MULT, &temp5);
+    mkl_sparse_status(status);
+    
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, temp5,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, l,
+        SPARSE_STAGE_FULL_MULT, &temp6);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_sp2m(
+        SPARSE_OPERATION_NON_TRANSPOSE, da, temp6,
+        SPARSE_OPERATION_NON_TRANSPOSE, db, bs,
+        SPARSE_STAGE_FULL_MULT, &temp7);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_d_add(
+        SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
+        temp7, M);
+    mkl_sparse_status(status);
+
+    status = mkl_sparse_destroy(h);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(th);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(l);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(bs);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp1);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp2);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp3);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp4);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp5);
+    mkl_sparse_status(status);
+    status = mkl_sparse_destroy(temp6);
+    mkl_sparse_status(status);
+
+    /*
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);
@@ -204,6 +363,7 @@ void sbp_sat::x2::make_M_boundary(
     destroy<fw>(temp6);
     destroy<fw>(temp7);
     destroy<fw>(temp8);
+    */
 
   }
 }

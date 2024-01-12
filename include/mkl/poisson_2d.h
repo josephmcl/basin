@@ -10,6 +10,9 @@
 #include "compute_sources.h"
 #include "compute_g.h"
 #include "compute_f_symbols.h"
+#include "compute_f.h"
+#include "compute_m.h"
+#include "compute_mf.h"
 
 #include "omp.h"
 #include "mkl.h"
