@@ -233,16 +233,16 @@ components::make_d2() {
         //MatSetValue(d2x, in + j, in + j - n,  1. / spacing2 * h1v[i], ADD_VALUES);
         //MatSetValue(d2x, in + j, in + j,     -2. / spacing2 * h1v[i], ADD_VALUES);
         //MatSetValue(d2x, in + j, in + j + n,  1. / spacing2 * h1v[i], ADD_VALUES);  
-        d2x(1. / spacing2 * h1v[i], in + j, in + j - n);
+        d2x(1. / spacing2 * h1v[i],  in + j, in + j - n);
         d2x(-2. / spacing2 * h1v[i], in + j, in + j);
-        d2x(1. / spacing2 * h1v[i], in + j, in + j + n);
+        d2x(1. / spacing2 * h1v[i],  in + j, in + j + n);
 
         //MatSetValue(d2y, jn + i, jn + i - 1,  1. / spacing2 * h1v[i], ADD_VALUES);
         //MatSetValue(d2y, jn + i, jn + i,     -2. / spacing2 * h1v[i], ADD_VALUES);
         //MatSetValue(d2y, jn + i, jn + i + 1,  1. / spacing2 * h1v[i], ADD_VALUES);  
-        d2y(1. / spacing2 * h1v[i], jn + i, jn + i - 1);
+        d2y(1. / spacing2 * h1v[i],  jn + i, jn + i - 1);
         d2y(-2. / spacing2 * h1v[i], jn + i, jn + i);
-        d2y(1. / spacing2 * h1v[i], jn + i, jn + i + 1);
+        d2y(1. / spacing2 * h1v[i],  jn + i, jn + i + 1);
     }
   }
 

@@ -29,7 +29,7 @@ void make_m(
 
   sbp.d2x.mkl(&dd2x);
   sbp.d2y.mkl(&dd2y);
-  sbp.d2y.mkl(&hhl, -1);
+  sbp.hl.mkl(&hhl, -1);
 
   // MatAXPY(temp1, 1., sbp.d2x, UNKNOWN_NONZERO_PATTERN);
   // MatAXPY(temp1, 1., sbp.d2y, UNKNOWN_NONZERO_PATTERN);
@@ -44,9 +44,9 @@ void make_m(
 
   status = mkl_sparse_sp2m(
       SPARSE_OPERATION_NON_TRANSPOSE, da, hhl,
-      SPARSE_OPERATION_TRANSPOSE, db, temp1,
+      SPARSE_OPERATION_NON_TRANSPOSE, db, temp1,
       SPARSE_STAGE_FULL_MULT, &temp3);
-    mkl_sparse_status(status);
+  mkl_sparse_status(status);
 
   make_m_boundary(&Mb1, sbp, 1, boundary[0]);
   make_m_boundary(&Mb2, sbp, 2, boundary[1]);
@@ -72,6 +72,31 @@ void make_m(
       SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
       temp6, M);
   mkl_sparse_status(status);
+
+  sparse_index_base_t indexing;
+    MKL_INT rows, cols, *rowst, *rowe, *coli, *ia;
+    real_t *vals;
+    status = mkl_sparse_d_export_csr(
+      dd2y, &indexing, &rows, &cols, &rowst, &rowe, &coli, &vals);
+    mkl_sparse_status(status);
+    ia = (MKL_INT *) MKL_malloc(sizeof(MKL_INT) * ((sbp.n * sbp.n) + 1), 64);
+    std::memcpy(&ia[0], &rowst[0], sizeof(MKL_INT) * sbp.n * sbp.n);
+    ia[sbp.n * sbp.n] = rowe[sbp.n * sbp.n - 1];
+
+    for (int i = 0; i < 96; ++i) {
+      std::cout << vals[i] << " ";
+    }
+    std::cout << std::endl;
+
+    for (int i = 0; i < 96; ++i) {
+      std::cout << coli[i] << " ";
+    }
+    std::cout << std::endl;
+
+    for (int i = 0; i < sbp.n * sbp.n + 1; ++i) {
+      std::cout << ia[i] << " ";
+    }
+    std::cout << std::endl;
 
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);
@@ -135,7 +160,7 @@ void make_m_boundary(
     auto status = H.mkl(&th, sbp.τ);
     mkl_sparse_status(status);
 
-    status = H.mkl(&bh, sbp.β);
+    status = H.mkl(&bh, -sbp.β);
     mkl_sparse_status(status);
 
     status = L.mkl(&l);

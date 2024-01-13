@@ -83,6 +83,7 @@ struct csr {
     }
 
     csr &operator()(T value, std::size_t row, std::size_t column) {
+
         if (row >= n || row < 0) {
             throw std::invalid_argument("row out bounds");
         }
@@ -101,17 +102,24 @@ struct csr {
 			}
 		}
 
-        // overwrite existing value
-        if (static_cast<std::size_t>(coli) == column && nnz() > 0) { 
-            v[rowi] = value;
+        if (row == 1 && column == 0) {
+            std::cout << "wowowowo" << std::endl;
+            std::cout << rowi << std::endl;
+            std::cout << coli << std::endl;
         }
-        else {
+
+
+        // overwrite existing value
+        //if (static_cast<std::size_t>(coli) == column && nnz() > 0) { 
+        //    v[rowi] = value;
+        //}
+        //else {
             v.insert(v.begin() + rowi, value);
             c.insert(c.begin() + rowi, column);
             for (std::size_t i = row + 1; i <= n; i++) {
                 r[i] += 1;
             }
-        }
+        //}
         return *this;
     }
     csr(std::size_t n, std::size_t m) : n(n), m(m) {

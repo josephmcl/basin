@@ -8,6 +8,9 @@
 
 #include "mkl.h"
 #include "mkl_spblas.h"
+#include "mkl_pardiso.h"
+
+#include <cstring>
 
 using real_t = type::real_t;
 
