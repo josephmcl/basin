@@ -8,7 +8,7 @@
 
 #include "mkl.h"
 #include "mkl_spblas.h"
-#include "mkl_pardiso.h"
+#include "mkl_sparse_qr.h"
 
 #include <cstring>
 

@@ -9,7 +9,24 @@ void compute_mf(
   std::vector<real_t *>        &f,
   components             const &sbp) {
   
-  matrix_descr da;
+  sparse_status_t status;
+
+  for (std::size_t i = 0; i != m.size(); ++i) {
+    for (std::size_t j = 0; j != f.size(); ++j) {
+      for (std::size_t k = 0; k != sbp.n; ++k) {
+    
+        status = mkl_sparse_d_qr_solve(
+          SPARSE_OPERATION_NON_TRANSPOSE, m[i], nullptr,
+          SPARSE_LAYOUT_COLUMN_MAJOR, 1, x[j] + (sbp.n * k) , sbp.n * sbp.n, 
+          f[j] + (sbp.n * k), sbp.n * sbp.n);
+        mkl_sparse_status(status);
+      }
+    }
+  }
+}
+
+/*
+matrix_descr da;
   da.type = SPARSE_MATRIX_TYPE_GENERAL;
   da.mode = SPARSE_FILL_MODE_UPPER;
 	da.diag = SPARSE_DIAG_NON_UNIT;
@@ -24,25 +41,25 @@ void compute_mf(
   // todo: give up on pardiso for now and try the QR solver
 
   MKL_INT iparm[64];
-  iparm[0] = 1;         /* No solver default */
-  iparm[1] = 0;         /* Fill-in reordering from METIS */
-  iparm[3] = 0;         /* No iterative-direct algorithm */
-  iparm[4] = 0;         /* No user fill-in reducing permutation */
-  iparm[5] = 0;         /* Write solution into x */
-  iparm[6] = 0;         /* Not in use */
-  iparm[7] = 0;         /* Max numbers of iterative refinement steps */
-  iparm[8] = 0;         /* Not in use */
-  iparm[9] = 13;        /* Perturb the pivot elements with 1E-13 */
-  iparm[10] = 1;        /* Use nonsymmetric permutation and scaling MPS */
-  iparm[11] = 0;        /* Not in use */
-  iparm[12] = 0;        /* Maximum weighted matching algorithm is switched-off (default for symmetric). Try iparm[12] = 1 in case of inappropriate accuracy */
-  iparm[13] = 0;        /* Output: Number of perturbed pivots */
-  iparm[14] = 0;        /* Not in use */
-  iparm[15] = 0;        /* Not in use */
-  iparm[16] = 0;        /* Not in use */
-  iparm[17] = -1;       /* Output: Number of nonzeros in the factor LU */
-  iparm[18] = -1;       /* Output: Mflops for LU factorization */
-  iparm[19] = 0;        /* Output: Numbers of CG Iterations */
+  iparm[0] = 1;          No solver default 
+  iparm[1] = 0;          Fill-in reordering from METIS 
+  iparm[3] = 0;          No iterative-direct algorithm 
+  iparm[4] = 0;          No user fill-in reducing permutation 
+  iparm[5] = 0;          Write solution into x 
+  iparm[6] = 0;          Not in use 
+  iparm[7] = 0;          Max numbers of iterative refinement steps 
+  iparm[8] = 0;          Not in use 
+  iparm[9] = 13;         Perturb the pivot elements with 1E-13 
+  iparm[10] = 1;         Use nonsymmetric permutation and scaling MPS 
+  iparm[11] = 0;         Not in use 
+  iparm[12] = 0;         Maximum weighted matching algorithm is switched-off (default for symmetric). Try iparm[12] = 1 in case of inappropriate accuracy 
+  iparm[13] = 0;         Output: Number of perturbed pivots 
+  iparm[14] = 0;         Not in use 
+  iparm[15] = 0;         Not in use 
+  iparm[16] = 0;         Not in use 
+  iparm[17] = -1;        Output: Number of nonzeros in the factor LU 
+  iparm[18] = -1;        Output: Mflops for LU factorization 
+  iparm[19] = 0;         Output: Numbers of CG Iterations 
   
   iparm[34] = 1; 
   iparm[26] = 1;
@@ -109,14 +126,14 @@ void compute_mf(
 
     phase = 11;
     pardiso(pt, 
-      &max_factors,    /* Maximum # of allocd factors = 1 */
-      &factor_choice,  /* Which factor to choose = 1      */
-      &matrix_type,    /* Matrix type nonsym, posdef = 11 */
+      &max_factors,     Maximum # of allocd factors = 1 
+      &factor_choice,   Which factor to choose = 1      
+      &matrix_type,     Matrix type nonsym, posdef = 11 
       &phase, 
-      &n,              /* Rows in A = sbp.n * sbp.n       */
+      &n,               Rows in A = sbp.n * sbp.n       
       vals, ia, coli,
       &iunused, 
-      &nrhs,           /* Columns in F = sbp.n            */
+      &nrhs,            Columns in F = sbp.n            
       iparm,
       &msglvl,
       &dunused,
@@ -134,14 +151,14 @@ void compute_mf(
 
     phase = 22;
     pardiso(pt, 
-      &max_factors,    /* Maximum # of allocd factors = 1 */
-      &factor_choice,  /* Which factor to choose = 1      */
-      &matrix_type,    /* Matrix type nonsym, posdef = 11 */
+      &max_factors,     Maximum # of allocd factors = 1 
+      &factor_choice,   Which factor to choose = 1      
+      &matrix_type,     Matrix type nonsym, posdef = 11 
       &phase, 
-      &n,              /* Rows in A = sbp.n * sbp.n       */
+      &n,               Rows in A = sbp.n * sbp.n       
       vals, ia, coli,
       &iunused, 
-      &nrhs,           /* Columns in F = sbp.n            */
+      &nrhs,            Columns in F = sbp.n            
       iparm,
       &msglvl,
       &dunused,
@@ -155,14 +172,14 @@ void compute_mf(
 
     phase = 33;
     pardiso(pt, 
-      &max_factors,    /* Maximum # of allocd factors = 1 */
-      &factor_choice,  /* Which factor to choose = 1      */
-      &matrix_type,    /* Matrix type nonsym, posdef = 11 */
+      &max_factors,     Maximum # of allocd factors = 1 
+      &factor_choice,   Which factor to choose = 1      
+      &matrix_type,     Matrix type nonsym, posdef = 11 
       &phase, 
-      &n,              /* Rows in A = sbp.n * sbp.n       */
+      &n,               Rows in A = sbp.n * sbp.n       
       vals, ia, coli,
       &iunused, 
-      &nrhs,           /* Columns in F = sbp.n            */
+      &nrhs,            Columns in F = sbp.n            
       iparm,
       &msglvl,
       (void *)f[factor_index],
@@ -175,6 +192,4 @@ void compute_mf(
     MKL_free(rowe);
     MKL_free(coli);
     MKL_free(vals);
-    MKL_free(ia);
-  }
-}
+    MKL_free(ia); */

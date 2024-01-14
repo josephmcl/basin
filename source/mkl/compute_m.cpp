@@ -73,30 +73,13 @@ void make_m(
       temp6, M);
   mkl_sparse_status(status);
 
-  sparse_index_base_t indexing;
-    MKL_INT rows, cols, *rowst, *rowe, *coli, *ia;
-    real_t *vals;
-    status = mkl_sparse_d_export_csr(
-      dd2y, &indexing, &rows, &cols, &rowst, &rowe, &coli, &vals);
-    mkl_sparse_status(status);
-    ia = (MKL_INT *) MKL_malloc(sizeof(MKL_INT) * ((sbp.n * sbp.n) + 1), 64);
-    std::memcpy(&ia[0], &rowst[0], sizeof(MKL_INT) * sbp.n * sbp.n);
-    ia[sbp.n * sbp.n] = rowe[sbp.n * sbp.n - 1];
+  matrix_descr dc;
+  dc.type = SPARSE_MATRIX_TYPE_GENERAL;
+  status = mkl_sparse_qr_reorder(*M, dc);
+  mkl_sparse_status(status);
 
-    for (int i = 0; i < 96; ++i) {
-      std::cout << vals[i] << " ";
-    }
-    std::cout << std::endl;
-
-    for (int i = 0; i < 96; ++i) {
-      std::cout << coli[i] << " ";
-    }
-    std::cout << std::endl;
-
-    for (int i = 0; i < sbp.n * sbp.n + 1; ++i) {
-      std::cout << ia[i] << " ";
-    }
-    std::cout << std::endl;
+  status = mkl_sparse_d_qr_factorize(*M, nullptr);
+  mkl_sparse_status(status);
 
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);
@@ -341,6 +324,7 @@ void make_m_boundary(
         SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
         temp7, M);
     mkl_sparse_status(status);
+    
 
     status = mkl_sparse_destroy(h);
     mkl_sparse_status(status);

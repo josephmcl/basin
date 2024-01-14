@@ -2,7 +2,7 @@
 
 #include "measure.h"
 #include "components.h"
-#include "compute_lambda_matrix.h"
+#include "compute_lambda_a.h"
 #include "definitions.h"
 #include "connect.h"
 #include "compute_b.h"
@@ -13,6 +13,7 @@
 #include "compute_f.h"
 #include "compute_m.h"
 #include "compute_mf.h"
+#include "compute_d.h"
 
 #include "omp.h"
 #include "mkl.h"

@@ -97,24 +97,43 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     
     // compute_lambda_matrix();
 
-    std::cout << "computing f.. \n";
     // Compute F components.
     auto Fsparse = std::vector<sparse_matrix_t>(4);
     auto Fdense = std::vector<real_t *>(4);
     compute_f(Fsparse, Fdense, sbp);
 
-    std::cout << "computed f\n";
-    // Compute solve of MX = F.
+
     std::vector<real_t *> MF;
-    compute_mf(MF, M, Fdense, sbp);
+    MF.resize(M.size() * Fdense.size());
+    for (std::size_t index = 0; index != MF.size(); ++index) {
+        MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
+    }
+
+    std::cout << "computed f " << std::endl;
+    // Compute solve of MX = F.
     
+    compute_mf(MF, M, Fdense, sbp);
+    std::cout << "computed mf " << std::endl;
+
+    sparse_matrix_t D;
+    compute_d(&D, sbp, interfaces);
+    std::cout << "computed d " << std::endl;
+
+    vv<std::size_t> lambda_indices;
+    make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
+
+    sparse_matrix_t λA;
+    compute_lambda_a(&λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
+    std::cout << "computed λA " << std::endl;
+
     // Cleanup everything we allocated.
     mkl_free(boundary_solution);
     mkl_free(sources);
     mkl_free(g);
-    for (auto &e: M) mkl_free(e);
-    for (auto &e: Fsparse) mkl_free(e);
+    for (auto &e: M) mkl_sparse_destroy(e);
+    for (auto &e: Fsparse) mkl_sparse_destroy(e);
     for (auto &e: Fdense) mkl_free(e);
+    for (auto &e: MF) mkl_free(e);
 
     return;
 }

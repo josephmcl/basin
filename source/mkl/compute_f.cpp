@@ -8,7 +8,6 @@ void compute_f(
    for (std::size_t index = 0; index != F_dense.size(); ++index) {
        F_dense[index] = (real_t *) MKL_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
    }
-    
 
   // (-τ * LN + β * LN* BS_y) * H_x 
   fcompop(&F_sparse[3], F_dense[3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
@@ -78,7 +77,7 @@ void fcompop(
     // sparse_status_t mkl_sparse_d_spmmd (const sparse_operation_t operation, const sparse_matrix_t A, const sparse_matrix_t B, const sparse_layout_t layout, double *C, const MKL_INT ldc);
     status = mkl_sparse_d_spmmd(
         SPARSE_OPERATION_NON_TRANSPOSE, 
-        temp2, h, SPARSE_LAYOUT_ROW_MAJOR, 
+        temp2, h, SPARSE_LAYOUT_COLUMN_MAJOR, 
         f_dense, CblasRowMajor);
     /*status = mkl_sparse_sp2md(
         SPARSE_OPERATION_NON_TRANSPOSE, da, temp2,

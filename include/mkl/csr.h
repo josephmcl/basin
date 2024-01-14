@@ -102,13 +102,6 @@ struct csr {
 			}
 		}
 
-        if (row == 1 && column == 0) {
-            std::cout << "wowowowo" << std::endl;
-            std::cout << rowi << std::endl;
-            std::cout << coli << std::endl;
-        }
-
-
         // overwrite existing value
         //if (static_cast<std::size_t>(coli) == column && nnz() > 0) { 
         //    v[rowi] = value;
