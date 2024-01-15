@@ -14,6 +14,12 @@
 #include "compute_m.h"
 #include "compute_mf.h"
 #include "compute_d.h"
+#include "compute_mg.h"
+#include "compute_lambda_b.h"
+#include "compute_lambda.h"
+#include "compute_rhs.h"
+#include "compute_u.h"
+
 
 #include "omp.h"
 #include "mkl.h"
@@ -21,6 +27,8 @@
 
 #include <iomanip>
 #include <string>
+#include <chrono>
+#include <thread>
 
 namespace poisson_2d {
 

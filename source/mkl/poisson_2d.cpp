@@ -1,7 +1,7 @@
 #include "poisson_2d.h"
 
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
-
+    
     const std::size_t l_blocks = eln;
     const std::size_t n_blocks = l_blocks * l_blocks;
     auto span = 1. / static_cast<double>(l_blocks);
@@ -25,6 +25,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     vv<std::size_t> interfaces;
     std::size_t n_interfaces = make_connectivity(interfaces, l_blocks);
 
+    /*
     std::cout << "   Connectivity (nnz = " << n_interfaces 
               << ")" << std::endl;
     for (auto r : interfaces) {
@@ -35,6 +36,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
         }
         std::cout << std::endl;
     }
+    */
 
     sbp.n_blocks = n_blocks; // additional non sbp-sat info. but  
     sbp.n_interfaces = n_interfaces; // useful to have along. 
@@ -107,33 +109,131 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     MF.resize(M.size() * Fdense.size());
     for (std::size_t index = 0; index != MF.size(); ++index) {
         MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
+        memset(MF[index], 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n);
     }
-
     std::cout << "computed f " << std::endl;
-    // Compute solve of MX = F.
     
+    // Compute solve of MX = F.
     compute_mf(MF, M, Fdense, sbp);
     std::cout << "computed mf " << std::endl;
 
+    // Setup D matrix.
     sparse_matrix_t D;
     compute_d(&D, sbp, interfaces);
     std::cout << "computed d " << std::endl;
 
+    // Setup interface list.
     vv<std::size_t> lambda_indices;
     make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
 
-    sparse_matrix_t λA;
-    compute_lambda_a(&λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
+    // Compute λA.
+    double *λA = (double *) mkl_malloc(
+      sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
+    memset(λA, 0, sizeof(long long int) * sbp.n * sbp.n_interfaces);
+    compute_lambda_a(λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
     std::cout << "computed λA " << std::endl;
 
-    // Cleanup everything we allocated.
+    /*
+    sparse_index_base_t indexing;
+    MKL_INT rows, cols, *rowst, *rowe, *coli, *ia;
+    real_t *vals;
+    auto status = mkl_sparse_d_export_csr(
+      λA, &indexing, &rows, &cols, &rowst, &rowe, &coli, &vals);
+    mkl_sparse_status(status);
+    
+    ia = (MKL_INT *) MKL_malloc(sizeof(MKL_INT) * ((sbp.n * sbp.n_interfaces) + 1), 64);
+    std::memcpy(&ia[0], &rowst[0], sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
+    ia[sbp.n * sbp.n_interfaces] = rowe[sbp.n * sbp.n_interfaces - 1];
+
+    std::cout << rows << std::endl;
+    std::cout << cols << std::endl;
+    for (int i = 0; i < rowe[rows - 1]; ++i) {
+      std::cout << vals[i] << " ";
+    }
+    std::cout << std::endl << std::endl;
+
+    for (int i = 0; i < rowe[rows - 1]; ++i) {
+      std::cout << coli[i] << " ";
+    }
+    std::cout << std::endl << std::endl;
+
+    for (int i = 0; i < sbp.n * sbp.n_interfaces + 1; ++i) {
+      std::cout << ia[i] << " ";
+    }
+    std::cout << std::endl;
+    */
+
+    // Compute Mx = g
+    real_t *Mg;
+    std::size_t sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
+    Mg = (double *) mkl_malloc(sz, 64);
+    memset(Mg, 0, sz);
+    compute_mg(Mg, M, g, sbp);
+    std::cout << "computed mg " << std::endl;
+
+    // Compute λb
+    real_t *λb;
+    sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
+    λb = (double *) mkl_malloc(sz, 64);
+    memset(λb, 0, sz);
+    compute_lambda_b(λb, Fsparse, Mg, FT_symbols, sbp);
+    std::cout << "computed λb " << std::endl;
+
     mkl_free(boundary_solution);
     mkl_free(sources);
     mkl_free(g);
-    for (auto &e: M) mkl_sparse_destroy(e);
-    for (auto &e: Fsparse) mkl_sparse_destroy(e);
     for (auto &e: Fdense) mkl_free(e);
     for (auto &e: MF) mkl_free(e);
+    mkl_free(Mg);
+
+    // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    long long int *piv = (long long int *) mkl_malloc(
+      sizeof(long long int) * sbp.n * sbp.n_interfaces, 64);
+    memset(piv, 0, sizeof(long long int) * sbp.n * sbp.n_interfaces);
+    // Compute λ
+    initialize_lambda(λA, piv, sbp);
+    std::cout << "initd λ " << std::endl;
+
+    // real_t *λ;
+    // sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
+    // λ = (double *) mkl_malloc(sz, 64);
+    // memset(λ, 0, sz);
+    compute_lambda(λA, piv, λb, sbp);
+    std::cout << "computed λ " << std::endl;
+
+    std::cout << λb[0] << std::endl;
+    std::cout << λb[1] << std::endl;
+    std::cout << λb[2] << std::endl;
+    std::cout << λb[3] << std::endl;
+
+    real_t *rhs;
+    sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
+    rhs = (double *) mkl_malloc(sz, 64);
+    memset(rhs, 0, sz);
+    compute_rhs(rhs, Fsparse, λb, F_symbols, sbp);
+    std::cout << "computed rhs " << std::endl;
+
+    real_t *u;
+    sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
+    u = (double *) mkl_malloc(sz, 64);
+    compute_u(u, M, rhs, sbp);
+    std::cout << "computed u " << std::endl;
+
+    
+    
+
+    
+    // Cleanup everything we allocated.
+    for (auto &e: M) mkl_sparse_destroy(e);
+    for (auto &e: Fsparse) mkl_sparse_destroy(e);
+    mkl_free(λA);
+    mkl_sparse_destroy(D);
+    mkl_free(λb);
+    // mkl_free(λ);
+    mkl_free(rhs);
+    mkl_free(u);
+    
 
     return;
 }

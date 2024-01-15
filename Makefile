@@ -59,7 +59,7 @@ objects_and_test_objects += $(test_objects)
 
 rm = rm -f
 
-gccflags = -std=c++2a -Wall -Wpedantic -g -O3 -finput-charset=UTF-8 
+gccflags = -std=c++2a -Wall -Wpedantic  -O3 -finput-charset=UTF-8
 
 compiler_flags := $(gccflags) 
 
@@ -68,7 +68,7 @@ petsc_include    := -I${PETSC_INCLUDE}
 openmpi_include  := -I${OPENMPI_INCLUDE}
 cernroot_include := -I${CERN_ROOT_INCLUDE}
 openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include 
-mkl_include      := -m64 -I${MKLROOT}/include 
+mkl_include      := -DMKL_ILP64  -m64 -I${MKLROOT}/include 
 
 includes := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include) 
 #  \
@@ -101,8 +101,8 @@ oneapi_lib := -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell
 oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
 
 # More MKL Implementation stuff
-mkl_impl_includes  := -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
-mkl_impl_libraries := $(pthread_library) -L$(mkl_library) -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_gnu_thread -lmkl_core -lpthread -lm -ldl -lgomp -fopenmp # $(oneapi_lib) 
+mkl_impl_includes := -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
+mkl_impl_libraries := $(pthread_library) -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl # -fopenmp # $(oneapi_lib) 
 define speaker
 	@echo [make:$$PPID] $(1)
 	@$(1)
@@ -138,7 +138,7 @@ $(binary_directory)/$(mkl_target): $(mkl_impl_objects)
  
 $(mkl_impl_objects): $(mkl_impl_object_directory)/%.o: $(mkl_impl_source_directory)/%.$(source_ext) $(mkl_impl_object_directory_absent)
 	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(mkl_impl_includes)) 
+	$(cc) $(compiler_flags)  -c $< -o $@ $(mkl_impl_includes)) 
 
 .PHONY: petsc 
 petsc: $(binary_directory)/$(target)

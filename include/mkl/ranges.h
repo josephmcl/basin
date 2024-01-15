@@ -132,7 +132,7 @@ template <typename T> struct linrange {
             return iterator{lhs + rhs.index, rhs.Linrange}; } 
 
         inline std::iter_reference_t<I> 
-        operator[](const std::size_t &n) const { 
+        operator[](const std::size_t &n) { 
             index = n; return *this;}
 
         void _inc_impl() { 

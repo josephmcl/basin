@@ -183,6 +183,7 @@ components::make_hl() {
   hl(v * v, n * n - 1, n * n - 1);
   
   //finalize<fw>(hl);
+
 }
 
 void 

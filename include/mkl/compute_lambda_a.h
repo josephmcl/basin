@@ -10,7 +10,7 @@
 #include "mkl_spblas.h"
 
 void compute_lambda_a(
-  sparse_matrix_t              *lambdaA,
+  double               *lambdaA,
   sparse_matrix_t              *D,
   std::vector<sparse_matrix_t> &F,
   std::vector<real_t *>        &MF,

@@ -38,10 +38,10 @@ struct csr {
     T *val_data() {
         return &v[0];
     }
-    MKL_INT *col_index_data() const {
+    MKL_INT *col_index_data() {
         return &c[0];
     }
-    MKL_INT *row_index_data() const {
+    MKL_INT *row_index_data() {
         return &r[0];
     }
     sparse_status_t mkl(
@@ -61,6 +61,9 @@ struct csr {
         vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
         cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
         rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
+        memset(vv, 0, sizeof(T) * v.size());
+        memset(cc, 0, sizeof(MKL_INT) * c.size());
+        memset(rr, 0, sizeof(MKL_INT) * r.size());
 
         std::memcpy(vv, &data[0], sizeof(T) * v.size());
         std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());

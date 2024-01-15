@@ -25,5 +25,6 @@ void fcompop(
   csr<real_t> &B,
   csr<real_t> &H,
   real_t       const τ, 
-  real_t       const β);
+  real_t       const β,
+  std::size_t        n);
   

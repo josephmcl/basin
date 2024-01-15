@@ -11,14 +11,16 @@ void compute_mf(
   
   sparse_status_t status;
 
+  std::size_t l;
   for (std::size_t i = 0; i != m.size(); ++i) {
     for (std::size_t j = 0; j != f.size(); ++j) {
       for (std::size_t k = 0; k != sbp.n; ++k) {
     
+        l = i * f.size() + j;
         status = mkl_sparse_d_qr_solve(
           SPARSE_OPERATION_NON_TRANSPOSE, m[i], nullptr,
-          SPARSE_LAYOUT_COLUMN_MAJOR, 1, x[j] + (sbp.n * k) , sbp.n * sbp.n, 
-          f[j] + (sbp.n * k), sbp.n * sbp.n);
+          SPARSE_LAYOUT_COLUMN_MAJOR, 1, &x[l][sbp.n * sbp.n * k] , sbp.n, 
+          &f[j][sbp.n * sbp.n * k], sbp.n);
         mkl_sparse_status(status);
       }
     }

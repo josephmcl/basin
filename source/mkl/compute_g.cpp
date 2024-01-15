@@ -30,6 +30,7 @@ void compute_g(
     */
 
     (*g) = (real_t *) MKL_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks, 64);
+    memset(*g, 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks);
 
     std::size_t n2 = sbp.n * sbp.n;
     std::size_t face_size = sbp.n * sbp.n_blocks_dim;
