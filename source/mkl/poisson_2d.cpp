@@ -1,7 +1,10 @@
 #include "poisson_2d.h"
+#include "timing.h"
 
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     
+    timing::init();
+
     const std::size_t l_blocks = eln;
     const std::size_t n_blocks = l_blocks * l_blocks;
     auto span = 1. / static_cast<double>(l_blocks);
@@ -42,6 +45,21 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     sbp.n_interfaces = n_interfaces; // useful to have along. 
     sbp.n_blocks_dim = l_blocks;
     sbp.n_threads = static_cast<std::size_t>(omp_get_max_threads());
+
+    mkl_set_num_threads(sbp.n_threads);
+
+    MKL_INT *piv = (MKL_INT *) mkl_malloc(
+      sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
+    // memset(piv, 0, sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
+    for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces; ++i) {
+      piv[i] = 0;
+    }
+    double *λA = (double *) mkl_malloc(
+      sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
+    for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces; ++i) {
+      λA[i] = 0;
+    }
+    // memset(λA, 0, sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces);
 
 
     // Compute flux components used by b. 
@@ -92,46 +110,58 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     << std::endl << " | threads: " << sbp.n_threads 
     << std::endl;
 
+    
     auto M = std::vector<sparse_matrix_t>(3);
+    auto begin = timing::read();
     make_m(&M[0], sbp, {1, 1, 2, 1});
     make_m(&M[1], sbp, {1, 1, 1, 1});
     make_m(&M[2], sbp, {1, 1, 1, 2});
+    auto end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin
+      << " s # " << "Computed M." << std::endl;
     
     // compute_lambda_matrix();
 
     // Compute F components.
     auto Fsparse = std::vector<sparse_matrix_t>(4);
     auto Fdense = std::vector<real_t *>(4);
+    begin = timing::read();
     compute_f(Fsparse, Fdense, sbp);
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed F." << std::endl;
 
-
+    
     std::vector<real_t *> MF;
     MF.resize(M.size() * Fdense.size());
     for (std::size_t index = 0; index != MF.size(); ++index) {
         MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
         memset(MF[index], 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n);
     }
-    std::cout << "computed f " << std::endl;
     
     // Compute solve of MX = F.
+    begin = timing::read();
     compute_mf(MF, M, Fdense, sbp);
-    std::cout << "computed mf " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed MX=F." << std::endl;
 
     // Setup D matrix.
     sparse_matrix_t D;
     compute_d(&D, sbp, interfaces);
-    std::cout << "computed d " << std::endl;
+    // std::cout << "computed d " << std::endl;
 
     // Setup interface list.
     vv<std::size_t> lambda_indices;
     make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
 
     // Compute λA.
-    double *λA = (double *) mkl_malloc(
-      sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
-    memset(λA, 0, sizeof(long long int) * sbp.n * sbp.n_interfaces);
+    begin = timing::read();
+    // std::cout << sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces << std::endl;
     compute_lambda_a(λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
-    std::cout << "computed λA " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+      << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
 
     /*
     sparse_index_base_t indexing;
@@ -168,62 +198,69 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     std::size_t sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
     Mg = (double *) mkl_malloc(sz, 64);
     memset(Mg, 0, sz);
+
+    begin = timing::read();
     compute_mg(Mg, M, g, sbp);
-    std::cout << "computed mg " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed Mx = g." << std::endl;
 
     // Compute λb
     real_t *λb;
     sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
     λb = (double *) mkl_malloc(sz, 64);
-    memset(λb, 0, sz);
-    compute_lambda_b(λb, Fsparse, Mg, FT_symbols, sbp);
-    std::cout << "computed λb " << std::endl;
+    memset(λb, 0, sz);    
 
-    mkl_free(boundary_solution);
-    mkl_free(sources);
-    mkl_free(g);
-    for (auto &e: Fdense) mkl_free(e);
-    for (auto &e: MF) mkl_free(e);
-    mkl_free(Mg);
+    begin = timing::read();
+    compute_lambda_b(λb, Fsparse, Mg, FT_symbols, sbp);
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+    << " s # " << "Computed λb (gd - FT * M \\ g)." << std::endl;
 
     // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    long long int *piv = (long long int *) mkl_malloc(
-      sizeof(long long int) * sbp.n * sbp.n_interfaces, 64);
-    memset(piv, 0, sizeof(long long int) * sbp.n * sbp.n_interfaces);
+    // std::cout << sizeof(MKL_INT) * sbp.n * sbp.n_interfaces << std::endl;
+    // std::cout << sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces << std::endl;
+    begin = timing::read();
     // Compute λ
+    // std::cout << "potato" << std::endl;
     initialize_lambda(λA, piv, sbp);
-    std::cout << "initd λ " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin
+      << " s # " << "Factorized λA." << std::endl;
 
     // real_t *λ;
     // sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
     // λ = (double *) mkl_malloc(sz, 64);
     // memset(λ, 0, sz);
+    begin = timing::read();
     compute_lambda(λA, piv, λb, sbp);
-    std::cout << "computed λ " << std::endl;
-
-    std::cout << λb[0] << std::endl;
-    std::cout << λb[1] << std::endl;
-    std::cout << λb[2] << std::endl;
-    std::cout << λb[3] << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin
+      << " s # " << "Computed λ (λA \\ λb)." << std::endl;
 
     real_t *rhs;
     sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
     rhs = (double *) mkl_malloc(sz, 64);
     memset(rhs, 0, sz);
+
+    begin = timing::read();
     compute_rhs(rhs, Fsparse, λb, F_symbols, sbp);
-    std::cout << "computed rhs " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin 
+      << " s # " << "Computed b (g - F * λ)." << std::endl;
 
     real_t *u;
     sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
     u = (double *) mkl_malloc(sz, 64);
+
+    begin = timing::read();
     compute_u(u, M, rhs, sbp);
-    std::cout << "computed u " << std::endl;
+    end = timing::read();
+    logging::out << std::setw(14) << std::fixed << end - begin
+      << " s # " << "Computed u (M \\ b)." << std::endl;
 
-    
-    
 
-    
     // Cleanup everything we allocated.
     for (auto &e: M) mkl_sparse_destroy(e);
     for (auto &e: Fsparse) mkl_sparse_destroy(e);
@@ -233,6 +270,13 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // mkl_free(λ);
     mkl_free(rhs);
     mkl_free(u);
+
+    mkl_free(boundary_solution);
+    mkl_free(sources);
+    mkl_free(g);
+    for (auto &e: Fdense) mkl_free(e);
+    for (auto &e: MF) mkl_free(e);
+    mkl_free(Mg);
     
 
     return;

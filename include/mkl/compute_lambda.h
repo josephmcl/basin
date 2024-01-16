@@ -13,11 +13,11 @@
 
 void initialize_lambda(
     double *lambdaA,
-    long long int *piv,
+    MKL_INT *piv,
     components &sbp);
 
 void compute_lambda(
     real_t *lambdaA,
-    long long int *piv,
+    MKL_INT *piv,
     real_t *lambdab,
     components &sbp);

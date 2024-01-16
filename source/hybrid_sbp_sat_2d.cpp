@@ -1,5 +1,5 @@
 #include "hybrid_sbp_sat_2d.h"
-#include "timing.h"
+// #include "timing.h"
 
 
 
@@ -41,7 +41,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
     [ TT  D ][ λ ]   [ bλ ]
   */
 
-  timing::init();
+  // timing::init();
    
   using namespace sbp_sat;
 
@@ -410,7 +410,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
   // Compute the solution 
   // solution = M \ (g - F * lambda)
-  // num_sol = M\(g_bar - F*lambda)
+  // num_sol = M \ (g_bar - F*lambda)
 
   begin = timing::read();
   petsc_vector b, neg, g_explicit; // b vector is the b λ-conditioned vector 

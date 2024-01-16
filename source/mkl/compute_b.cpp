@@ -49,11 +49,7 @@ void compute_b1(
     matrix_descr da, db;
 
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
-    da.mode = SPARSE_FILL_MODE_UPPER;
-	da.diag = SPARSE_DIAG_NON_UNIT;
     db.type = SPARSE_MATRIX_TYPE_GENERAL;
-    db.mode = SPARSE_FILL_MODE_UPPER;
-	db.diag = SPARSE_DIAG_NON_UNIT;
 
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_TRANSPOSE, da, bs,
@@ -160,11 +156,7 @@ void compute_b2(
     matrix_descr da, db;
 
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
-    da.mode = SPARSE_FILL_MODE_UPPER;
-	da.diag = SPARSE_DIAG_NON_UNIT;
     db.type = SPARSE_MATRIX_TYPE_GENERAL;
-    db.mode = SPARSE_FILL_MODE_UPPER;
-	db.diag = SPARSE_DIAG_NON_UNIT;
 
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_TRANSPOSE, da, bs,

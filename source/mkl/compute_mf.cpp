@@ -12,6 +12,7 @@ void compute_mf(
   sparse_status_t status;
 
   std::size_t l;
+  #pragma omp parallel for private(l) collapse(2) num_threads(sbp.n_threads)
   for (std::size_t i = 0; i != m.size(); ++i) {
     for (std::size_t j = 0; j != f.size(); ++j) {
       for (std::size_t k = 0; k != sbp.n; ++k) {

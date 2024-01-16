@@ -21,11 +21,7 @@ void make_m(
 
   matrix_descr da, db;
   da.type = SPARSE_MATRIX_TYPE_GENERAL;
-  da.mode = SPARSE_FILL_MODE_UPPER;
-	da.diag = SPARSE_DIAG_NON_UNIT;
   db.type = SPARSE_MATRIX_TYPE_GENERAL;
-  db.mode = SPARSE_FILL_MODE_UPPER;
-	db.diag = SPARSE_DIAG_NON_UNIT;
 
   sbp.d2x.mkl(&dd2x);
   sbp.d2y.mkl(&dd2y);
@@ -125,11 +121,7 @@ void make_m_boundary(
 
   matrix_descr da, db;
   da.type = SPARSE_MATRIX_TYPE_GENERAL;
-  da.mode = SPARSE_FILL_MODE_UPPER;
-	da.diag = SPARSE_DIAG_NON_UNIT;
   db.type = SPARSE_MATRIX_TYPE_GENERAL;
-  db.mode = SPARSE_FILL_MODE_UPPER;
-	db.diag = SPARSE_DIAG_NON_UNIT;
 
   if (boundary == dirichlet) {
 

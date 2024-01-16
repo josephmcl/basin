@@ -39,8 +39,6 @@ void compute_g(
 
     matrix_descr da;
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
-    da.mode = SPARSE_FILL_MODE_UPPER;
-	da.diag = SPARSE_DIAG_NON_UNIT;
 
     sparse_matrix_t h;
     sbp.hl.mkl(&h);

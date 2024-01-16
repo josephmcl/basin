@@ -13,6 +13,8 @@ void compute_u(
     double *up, *rp;
     std::size_t k;
     std::size_t limit = sbp.n_blocks;   
+    
+    #pragma omp parallel for private(up, rp, k) num_threads(sbp.n_threads)
     for (std::size_t i = 0; i != limit; ++i) {
         up = &u[i * sbp.n * sbp.n];
         rp = &rhs[i * sbp.n * sbp.n];

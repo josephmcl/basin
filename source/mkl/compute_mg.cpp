@@ -14,6 +14,7 @@ void compute_mg(
     double *gp, *mgp;
     std::size_t k;
     std::size_t limit = sbp.n_blocks;   
+    #pragma omp parallel for private(gp, mgp, k) num_threads(sbp.n_threads)
     for (std::size_t i = 0; i != limit; ++i) {
         gp = &g[i * sbp.n * sbp.n];
         mgp = &Mg[i * sbp.n * sbp.n];

@@ -19,7 +19,7 @@
 #include "compute_lambda.h"
 #include "compute_rhs.h"
 #include "compute_u.h"
-
+#include "logging.h"
 
 #include "omp.h"
 #include "mkl.h"
@@ -29,6 +29,7 @@
 #include <string>
 #include <chrono>
 #include <thread>
+
 
 namespace poisson_2d {
 
