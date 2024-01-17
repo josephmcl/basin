@@ -10,8 +10,11 @@
 #include "mkl_spblas.h"
 #include "mkl_sparse_qr.h"
 
+
+#include "omp.h"
+
 void compute_u(
     real_t *u,
-    std::vector<sparse_matrix_t> &M,
+    vv<sparse_matrix_t> &M,
     real_t *rhs, 
     components &sbp);

@@ -69,14 +69,6 @@ void make_m(
       temp6, M);
   mkl_sparse_status(status);
 
-  matrix_descr dc;
-  dc.type = SPARSE_MATRIX_TYPE_GENERAL;
-  status = mkl_sparse_qr_reorder(*M, dc);
-  mkl_sparse_status(status);
-
-  status = mkl_sparse_d_qr_factorize(*M, nullptr);
-  mkl_sparse_status(status);
-
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);
   status = mkl_sparse_destroy(Mb2);

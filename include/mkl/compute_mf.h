@@ -12,10 +12,12 @@
 
 #include <cstring>
 
+#include "omp.h"
+
 using real_t = type::real_t;
 
 void compute_mf(
   std::vector<real_t *>        &x,
-  std::vector<sparse_matrix_t> &m,
+  vv<sparse_matrix_t> &m,
   std::vector<real_t *>        &f,
   components             const &sbp);

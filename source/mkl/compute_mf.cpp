@@ -5,7 +5,7 @@
 // M-index major and F-index minor. 
 void compute_mf(
   std::vector<real_t *>        &x,
-  std::vector<sparse_matrix_t> &m,
+  vv<sparse_matrix_t> &m,
   std::vector<real_t *>        &f,
   components             const &sbp) {
   
@@ -13,13 +13,13 @@ void compute_mf(
 
   std::size_t l;
   #pragma omp parallel for private(l) collapse(2) num_threads(sbp.n_threads)
-  for (std::size_t i = 0; i != m.size(); ++i) {
+  for (std::size_t i = 0; i != m[0].size(); ++i) {
     for (std::size_t j = 0; j != f.size(); ++j) {
       for (std::size_t k = 0; k != sbp.n; ++k) {
-    
+        auto td = omp_get_thread_num();
         l = i * f.size() + j;
         status = mkl_sparse_d_qr_solve(
-          SPARSE_OPERATION_NON_TRANSPOSE, m[i], nullptr,
+          SPARSE_OPERATION_NON_TRANSPOSE, m[td][i], nullptr,
           SPARSE_LAYOUT_COLUMN_MAJOR, 1, &x[l][sbp.n * sbp.n * k] , sbp.n, 
           &f[j][sbp.n * sbp.n * k], sbp.n);
         mkl_sparse_status(status);

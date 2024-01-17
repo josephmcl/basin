@@ -2,7 +2,7 @@
 
 void compute_u(
     real_t *u,
-    std::vector<sparse_matrix_t> &M,
+    vv<sparse_matrix_t> &M,
     real_t *rhs, 
     components &sbp) {  
 
@@ -16,11 +16,12 @@ void compute_u(
     
     #pragma omp parallel for private(up, rp, k) num_threads(sbp.n_threads)
     for (std::size_t i = 0; i != limit; ++i) {
+        auto td = omp_get_thread_num();
         up = &u[i * sbp.n * sbp.n];
         rp = &rhs[i * sbp.n * sbp.n];
         k = mi[i % sbp.n_blocks_dim];
         status = mkl_sparse_d_qr_solve(
-            SPARSE_OPERATION_NON_TRANSPOSE, M[k], nullptr,
+            SPARSE_OPERATION_NON_TRANSPOSE, M[td][k], nullptr,
             SPARSE_LAYOUT_COLUMN_MAJOR, 1, up , sbp.n * sbp.n, 
             rp, sbp.n * sbp.n);
         mkl_sparse_status(status);

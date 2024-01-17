@@ -39,20 +39,22 @@ void initialize_lambda(
     // char u = 'U';
     //dpotrf2(&u, &size, a, &size, &err);
 
-    auto tds = omp_get_num_threads();
-    mkl_set_num_threads(56);
+    // auto tds = omp_get_num_threads();
+    // omp_set_num_threads(56);
+    // mkl_set_num_threads(56);
 
     dgetrf(&size, &size, a, &size, piv, &err);
     if (err != 0)
         std::cout << "dgetrf err: " << err << std::endl;
 
-    mkl_set_num_threads(tds);
+    // omp_set_num_threads(tds);
+    // mkl_set_num_threads(tds);
 }
 
 void compute_lambda(
     real_t *lambdaA,
     MKL_INT *piv,
-    real_t *lambdab,
+    real_t *lambda,
     components &sbp) {
 
     //auto tds = omp_get_num_threads();
@@ -66,7 +68,7 @@ void compute_lambda(
     dgetrs(
         &t, &size, 
         &rhs, lambdaA, &size,  piv, 
-        lambdab, &size, &s);
+        lambda, &size, &s);
     if (s != 0)
             std::cout << "dgetrs err: " << s << std::endl;
 

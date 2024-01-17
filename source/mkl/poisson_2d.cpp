@@ -46,7 +46,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     sbp.n_blocks_dim = l_blocks;
     sbp.n_threads = static_cast<std::size_t>(omp_get_max_threads());
 
-    mkl_set_num_threads(sbp.n_threads);
+    // mkl_set_num_threads(sbp.n_threads);
 
     MKL_INT *piv = (MKL_INT *) mkl_malloc(
       sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
@@ -111,15 +111,41 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     << std::endl;
 
     
-    auto M = std::vector<sparse_matrix_t>(3);
+    auto M = vv<sparse_matrix_t>();
+    M.resize(sbp.n_threads);
+    for (auto &e: M) {
+      e.resize(3);
+    }
     auto begin = timing::read();
-    make_m(&M[0], sbp, {1, 1, 2, 1});
-    make_m(&M[1], sbp, {1, 1, 1, 1});
-    make_m(&M[2], sbp, {1, 1, 1, 2});
+    make_m(&M[0][0], sbp, {1, 1, 2, 1});
+    make_m(&M[0][1], sbp, {1, 1, 1, 1});
+    make_m(&M[0][2], sbp, {1, 1, 1, 2});
     auto end = timing::read();
     logging::out << std::setw(14) << std::fixed << end - begin
       << " s # " << "Computed M." << std::endl;
-    
+
+    sparse_status_t status;
+    matrix_descr dc;
+    dc.type = SPARSE_MATRIX_TYPE_GENERAL;
+    for (std::size_t i = 1; i != M.size(); ++i) {
+      status = mkl_sparse_copy(M[0][0], dc, &M[i][0]);
+      mkl_sparse_status(status);
+      status = mkl_sparse_copy(M[0][1], dc, &M[i][1]);
+      mkl_sparse_status(status);
+      status = mkl_sparse_copy(M[0][2], dc, &M[i][2]);
+      mkl_sparse_status(status);
+    }
+    for (std::size_t i = 0; i != M.size(); ++i) {
+      for (std::size_t j = 0; j != M[i].size(); ++j) {
+      
+        status = mkl_sparse_qr_reorder(M[i][j], dc);
+        mkl_sparse_status(status);
+
+        status = mkl_sparse_d_qr_factorize(M[i][j], nullptr);
+        mkl_sparse_status(status);
+      }
+    }
+
     // compute_lambda_matrix();
 
     // Compute F components.
@@ -133,7 +159,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     
     std::vector<real_t *> MF;
-    MF.resize(M.size() * Fdense.size());
+    MF.resize(M[0].size() * Fdense.size());
     for (std::size_t index = 0; index != MF.size(); ++index) {
         MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
         memset(MF[index], 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n);
@@ -217,6 +243,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Computed λb (gd - FT * M \\ g)." << std::endl;
 
+    //for (std::size_t i = 0; i !=  sbp.n * sbp.n_interfaces; ++i) {
+    //  std::cout << λb[i] << " ";
+    //}
+    //std::cout << std::endl;
+
     // std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     // std::cout << sizeof(MKL_INT) * sbp.n * sbp.n_interfaces << std::endl;
@@ -250,6 +281,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     logging::out << std::setw(14) << std::fixed << end - begin 
       << " s # " << "Computed b (g - F * λ)." << std::endl;
 
+
     real_t *u;
     sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
     u = (double *) mkl_malloc(sz, 64);
@@ -260,9 +292,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     logging::out << std::setw(14) << std::fixed << end - begin
       << " s # " << "Computed u (M \\ b)." << std::endl;
 
-
     // Cleanup everything we allocated.
-    for (auto &e: M) mkl_sparse_destroy(e);
+    for (auto &e: M) {
+      for (auto &ee: e)
+        mkl_sparse_destroy(ee);
+    }
     for (auto &e: Fsparse) mkl_sparse_destroy(e);
     mkl_free(λA);
     mkl_sparse_destroy(D);

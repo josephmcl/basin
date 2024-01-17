@@ -13,9 +13,9 @@ void compute_lambda_b(
     matrix_descr da;
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
 
-    std::size_t findex, gindex;
+    std::size_t findex;
     double * lb, *mg;
-    #pragma omp parallel for collapse(2) private(findex, gindex, lb, mg, status) num_threads(sbp.n_threads)
+    #pragma omp parallel for collapse(2) private(findex, lb, mg, status) num_threads(sbp.n_threads)
     for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
         for (std::size_t j = 0; j != sbp.n_blocks; ++j) {
             if (FT_symbols[i][j] > 0) {

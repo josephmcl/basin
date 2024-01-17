@@ -2,7 +2,7 @@
 
 void compute_mg(
     real_t *Mg,
-    std::vector<sparse_matrix_t> &M,
+    vv<sparse_matrix_t> &M,
     real_t *g,
     components &sbp) {  
 
@@ -16,11 +16,12 @@ void compute_mg(
     std::size_t limit = sbp.n_blocks;   
     #pragma omp parallel for private(gp, mgp, k) num_threads(sbp.n_threads)
     for (std::size_t i = 0; i != limit; ++i) {
+        auto td = omp_get_thread_num();
         gp = &g[i * sbp.n * sbp.n];
         mgp = &Mg[i * sbp.n * sbp.n];
         k = mi[i % sbp.n_blocks_dim];
         status = mkl_sparse_d_qr_solve(
-            SPARSE_OPERATION_NON_TRANSPOSE, M[k], nullptr,
+            SPARSE_OPERATION_NON_TRANSPOSE, M[td][k], nullptr,
             SPARSE_LAYOUT_COLUMN_MAJOR, 1, mgp , sbp.n * sbp.n, 
             gp, sbp.n * sbp.n);
         mkl_sparse_status(status);
