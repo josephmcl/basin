@@ -2,21 +2,22 @@
 
 void compute_rhs(
     real_t *rhs,
+    real_t *g, 
     std::vector<sparse_matrix_t> &F,
     real_t *lambda,
     vv<std::size_t> &F_symbols,
     components &sbp) {
 
-    // Compute rhs = - F * lambda
+    // Compute rhs = g - F * lambda
 
     sparse_status_t status;
     matrix_descr da;
     std::vector<std::tuple<std::size_t, std::size_t, std::size_t>> temp;
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
-    for (std::size_t i = 0; i != sbp.n_blocks; ++i) {
+    for (auto &i : sbp.rank_index_u) {
         for (std::size_t j = 0; j != sbp.n_interfaces; ++j) {
             if (F_symbols[i][j] != 0) {
-                temp.push_back({i, j, F_symbols[i][j] - 1});
+                temp.push_back({i - sbp.rank_index_u[0], j, F_symbols[i][j] - 1});
             }
         }
     }
@@ -52,5 +53,9 @@ void compute_rhs(
             l, 
             1., r);
         mkl_sparse_status(status); 
+    }
+    
+    for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+        rhs[i] += g[i];
     }
 } 

@@ -7,6 +7,10 @@
 #include <vector>
 #include <string>
 
+#include <mpi.h>
+
+#include <stdio.h>
+
 int main(int argc, char **argv) {
 
     /* 
@@ -19,7 +23,14 @@ int main(int argc, char **argv) {
     
    if (argc < 3) exit(-1);
 
+    MPI_Init(&argc, &argv);
+
     //for (auto &e : params)
-    poisson_2d::problem(std::stoi(argv[1]), std::stoi(argv[2]));
+    // poisson_2d::problem(std::stoi(argv[1]), std::stoi(argv[2]));
     //poisson_2d::problem(std::get<0>(e), std::get<1>(e));
+    poisson_2d::problem(std::stoi(argv[1]), std::stoi(argv[2]));
+
+    MPI_Finalize();
 }
+
+

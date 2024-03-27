@@ -11,6 +11,7 @@
 
 void compute_rhs(
     real_t *rhs,
+    real_t *g, 
     std::vector<sparse_matrix_t> &F,
     real_t *lambda,
     vv<std::size_t> &F_symbols,

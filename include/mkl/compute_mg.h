@@ -18,3 +18,9 @@ void compute_mg(
     vv<sparse_matrix_t> &M,
     real_t *g,
     components &sbp);
+
+void compute_mg_mpi(
+    real_t *Mg,
+    vv<sparse_matrix_t> &M,
+    real_t *g,
+    components &sbp);

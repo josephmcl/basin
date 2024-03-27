@@ -18,3 +18,11 @@ void compute_lambda_a(
   vv<std::size_t>  const &FT_symbols,
   components                   &sbp);
 
+auto compute_lambda_a_mpi(
+  double              *lambdaA,
+  sparse_matrix_t              *D,
+  std::vector<sparse_matrix_t> &F,
+  std::vector<real_t *> &MF,
+  vv<std::size_t>  const &F_symbols,
+  vv<std::size_t>  const &FT_symbols,
+  components                   &sbp) -> void;

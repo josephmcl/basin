@@ -25,6 +25,8 @@
 #include "mkl.h"
 #include "mkl_spblas.h"
 
+#include <mpi.h>
+
 #include <iomanip>
 #include <string>
 #include <chrono>

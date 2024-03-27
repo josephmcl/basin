@@ -39,6 +39,11 @@ public:
   std::size_t n_blocks_dim; 
 
   std::size_t n_threads;
+  std::size_t n_ranks;
+  std::size_t rank;
+
+  std::size_t rank_limit_u;
+  std::vector<std::size_t> rank_index_u;
 
   
   csr<real_t> hl;
