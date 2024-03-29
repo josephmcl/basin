@@ -67,7 +67,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     sbp.rank_limit_u = (sbp.rank < alignment) 
         ? (sbp.n_blocks / sbp.n_ranks) + 1
         : (sbp.n_blocks / sbp.n_ranks);
-    std::size_t rank_limit_max = (sbp.n_blocks / sbp.n_ranks) + 1;
 
     // slack adjusts the index the latter, smaller indices to align with
     // the larger, earlier indices. 
@@ -205,25 +204,31 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     vv<std::size_t> lambda_indices;
     make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
 
-    // Allocate memory for λA.
-    double *λA = (double *) mkl_malloc(
-      sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
-    for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces; ++i) {
-      λA[i] = 0;
-    }
+    double *λA = nullptr;
+    if (sbp.rank == 0) {
+      // Allocate memory for λA.
+      λA = (double *) mkl_malloc(
+        sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
+      for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces; ++i) {
+        λA[i] = 0;
+      }
 
-    // Compute λA.
-    begin = timing::read();
-    // std::cout << sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces << std::endl;
-    compute_lambda_a(λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
-    end = timing::read();
-    trace.push_back(end - begin);
-    // logging::out << std::setw(14) << std::fixed << end - begin 
-    //  << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+      // Compute λA.
+      begin = timing::read();
+      // std::cout << sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces << std::endl;
+      compute_lambda_a(λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
+      end = timing::read();
+      trace.push_back(end - begin);
+      // logging::out << std::setw(14) << std::fixed << end - begin 
+      //  << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+    }
+    else {
+      trace.push_back(0);
+    }
 
     // Compute Mx = g
     real_t *Mg;
-    std::size_t sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks;
+    std::size_t sz = sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u;
     Mg = (double *) mkl_malloc(sz, 64);
     memset(Mg, 0, sz);
 
@@ -234,7 +239,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed Mx = g." << std::endl;
 
-    
     real_t *λb;
     sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
     λb = (double *) mkl_malloc(sz, 64);
@@ -248,30 +252,65 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed λb (gd - FT * M \\ g)." << std::endl;
 
-    // Allocate pivot table memory.
-    MKL_INT *piv = (MKL_INT *) mkl_malloc(
-      sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
-    // memset(piv, 0, sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
-    for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces; ++i) {
-      piv[i] = 0;
+    real_t *λb_reduced = nullptr;
+    sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
+    if (sbp.rank == 0) {
+      λb_reduced = (double *) mkl_malloc(sz, 64);
+      begin = timing::read();
     }
 
-    // Compute λ
-    begin = timing::read();
-    initialize_lambda(λA, piv, sbp);
-    end = timing::read();
-    trace.push_back(end - begin);
-    // logging::out << std::setw(14) << std::fixed << end - begin
-    //  << " s # " << "Factorized λA." << std::endl;
+    sz = sbp.n * sbp.n_interfaces;
+    MPI_Reduce(λb, λb_reduced, sz, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    begin = timing::read();
-    compute_lambda(λA, piv, λb, sbp);
-    end = timing::read();
-    trace.push_back(end - begin);
-    // logging::out << std::setw(14) << std::fixed << end - begin
-    //  << " s # " << "Computed λ (λA \\ λb)." << std::endl;
+    if (sbp.rank == 0) {
+      end = timing::read();
+      trace.push_back(end - begin);
+    }
 
-    // NOTE NOTE NOTE NOTE
+    if (sbp.rank == 0) {
+      // Allocate pivot table memory.
+      MKL_INT *piv = (MKL_INT *) mkl_malloc(
+        sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
+      memset(piv, 0, sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
+    
+      // Compute λ
+      begin = timing::read();
+      initialize_lambda(λA, piv, sbp);
+      end = timing::read();
+      trace.push_back(end - begin);
+      // logging::out << std::setw(14) << std::fixed << end - begin
+      //  << " s # " << "Factorized λA." << std::endl;
+
+      begin = timing::read();
+      compute_lambda(λA, piv, λb, sbp);
+      end = timing::read();
+      trace.push_back(end - begin);
+      // logging::out << std::setw(14) << std::fixed << end - begin
+      //  << " s # " << "Computed λ (λA \\ λb)." << std::endl;
+    }
+    else {
+      trace.push_back(0);
+      trace.push_back(0);
+      trace.push_back(0);
+    }
+
+    sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
+    if (sbp.rank == 0) {
+      std::memcpy(λb, λb_reduced, sz);
+      mkl_free(λb_reduced);
+      begin = timing::read();
+    }
+    
+    sz = sbp.n * sbp.n_interfaces;
+    MPI_Bcast(λb, sz, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    if (sbp.rank == 0) {
+      end = timing::read();
+      trace.push_back(end - begin);
+    }
+    else {
+      trace.push_back(0);
+    }
 
     // Allocated right-hand side memory. 
     real_t *rhs;
@@ -311,71 +350,47 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     // Free right-hand side memory. 
     mkl_free(rhs);
-    begin = timing::read();
-    compute_u(u, M, rhs, sbp);
-    end = timing::read();
-    trace.push_back(end - begin);
     
     // Gather solution on rank 0
-    /*
     std::vector<int> recieve_counts (sbp.n_ranks);
     std::vector<int> displacement (sbp.n_ranks);
     for (std::size_t i = 0; i != sbp.n_ranks; ++i) {
       recieve_counts[i] = (i < alignment) 
         ? (sbp.n_blocks / sbp.n_ranks) + 1
         : (sbp.n_blocks / sbp.n_ranks);
+      recieve_counts[i] *= sbp.n * sbp.n;
     }
     for (std::size_t i = 1; i < sbp.n_ranks; ++i) {
       displacement[i] = recieve_counts[i - 1] + displacement[i - 1];
     }
 
     real_t *uu = nullptr; 
-    
     if(sbp.rank == 0) {
-      begin = timing::read();
       sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks; 
       uu = (double *) mkl_malloc(sz, 64);
+      begin = timing::read();
     }
 
-    sz = sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u; 
-    MPI_Datatype send_type; 
-    MPI_Type_vector(1, sz, 0, MPI_DOUBLE, &send_type);
-    
-    if(sbp.rank == 0) {
-      MPI_Gatherv(
-        &u[0],     // local send buffer 
-        1,         // # of elements to send
-        send_type, // type of element (vector, length varies per rank)
-        uu,        // recieve buffer (only on rank 0)
-        &recieve_counts[0], // list of # to recieve from each rank 
-        &displacement[0],   // index of where to insert each vector
-        MPI_DOUBLE,     // recieved type
-        0,              // receiving rank 
-        MPI_COMM_WORLD);
-    }
-    else {
-      MPI_Gatherv(
-        &u[0],     // local send buffer 
-        1,         // # of elements to send
-        send_type, // type of element (vector, length varies per rank)
-        NULL,        // recieve buffer (only on rank 0)
-        &recieve_counts[0], // list of # to recieve from each rank 
-        &displacement[0],   // index of where to insert each vector
-        MPI_DOUBLE,     // recieved type
-        0,              // receiving rank 
-        MPI_COMM_WORLD);
-    }
+    sz = sbp.n * sbp.n * sbp.rank_limit_u;  
+    MPI_Gatherv(
+      &u[0],     // local send buffer 
+      sz,         // # of elements to send
+      MPI_DOUBLE, // type of element (vector, length varies per rank)
+      uu,        // recieve buffer (only on rank 0)
+      &recieve_counts[0], // list of # to recieve from each rank 
+      &displacement[0],   // index of where to insert each vector
+      MPI_DOUBLE,     // recieved type
+      0,              // receiving rank 
+      MPI_COMM_WORLD);
 
     if(sbp.rank == 0) {
       end = timing::read();
-      std::cout << "Gather took " << end - begin << std::endl;
+      trace.push_back(end - begin);
     }
-    */
-    
-    std::cout << "banana" << std::endl;
-
-
-
+    else {
+      trace.push_back(0);
+    }
+        
     // Cleanup everything we allocated.
     for (auto &e: M) {
       for (auto &ee: e)
@@ -395,23 +410,27 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     if(sbp.rank == 0) {
 
         std::vector<std::string> key = {
-          "LL^T=M   ",
-          "F        ",
-          "X=M^-1F  ",
-          "λA=D-F^TX",
-          "x=M^-1g  ",
-          "λb=-F^Tx ",
-          "LL^T=λA  ",
-          "λ=λ^-1λb ",
-          "b=g-Fλ   ",
-          "u=M^-1b  "};
+          "LL^T=M            ",
+          "F                 ",
+          "X=M^-1F           ",
+          "(Rank 0) λA=D-F^TX",
+          "x=M^-1g           ",
+          "λb=-F^Tx          ",
+          "Reduce sum λb     ",
+          "(Rank 0) LL^T=λA  ",
+          "(Rank 0) λ=λ^-1λb ",
+          "Broadcast λ       ",
+          "b=g-Fλ            ",
+          "u=M^-1b           ",
+          "Gather u          "}; 
+
 
         std::size_t offset = trace.size();
-        std::vector<real_t> traces (10 * sbp.n_ranks);
-        MPI_Gather(&trace[0], 10, MPI_DOUBLE, &traces[0], 10, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+        std::vector<real_t> traces (offset * sbp.n_ranks);
+        MPI_Gather(&trace[0], offset, MPI_DOUBLE, &traces[0], offset, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         // printf("Values collected on process %d: %d, %d, %d, %d.\n", my_rank, buffer[0], buffer[1], buffer[2], buffer[3]);
 
-        std::cout << "         ";
+        std::cout << "                ";
         for (std::size_t i = 0; i != sbp.n_ranks; ++i) { 
           std::cout << ",      Rank " << std::setw(2) << i;
         }
@@ -423,9 +442,29 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
           }
         }
         std::cout << std::endl;
+
+        std::ofstream file;
+        std::stringstream filename;
+        filename << "results/r_" << sbp.n_ranks << "_t_" << sbp.n_threads 
+          << "_e_" << sbp.n_blocks << "_n2_" << sbp.n * sbp.n << ".csv";
+        file.open(filename.str());
+        file << "                ";
+        for (std::size_t i = 0; i != sbp.n_ranks; ++i) { 
+          file << ",      Rank " << std::setw(2) << i;
+        }
+        
+        for (std::size_t i = 0; i != offset; ++i) { 
+          file << std::endl << key[i];
+          for (std::size_t j = 0; j != sbp.n_ranks; ++j) { 
+            file << ", " << std::setw(8) << std::scientific << traces[offset * j + i];
+          }
+        }
+        file << std::endl;
+        file.close();
     }
     else {
-        MPI_Gather(&trace[0], 10, MPI_DOUBLE, NULL, 10, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+      std::size_t offset = trace.size();
+      MPI_Gather(&trace[0], offset, MPI_DOUBLE, NULL, offset, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }    
     
 

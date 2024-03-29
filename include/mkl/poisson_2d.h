@@ -31,6 +31,9 @@
 #include <string>
 #include <chrono>
 #include <thread>
+#include <fstream>
+#include <sstream>
+
 
 
 namespace poisson_2d {
