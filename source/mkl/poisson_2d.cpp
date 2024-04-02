@@ -205,26 +205,42 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
 
     double *λA = nullptr;
+    MKL_INT *piv = nullptr;
     if (sbp.rank == 0) {
       // Allocate memory for λA.
       λA = (double *) mkl_malloc(
-        sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
+          sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces, 64);
       for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces; ++i) {
         λA[i] = 0;
       }
+      
+      // Allocate pivot table memory.
+      piv = (MKL_INT *) mkl_malloc(
+        sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
+      memset(piv, 0, sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
+      
+    }
 
+    if (sbp.rank == 0) {
+      
       // Compute λA.
       begin = timing::read();
-      // std::cout << sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.n_interfaces << std::endl;
       compute_lambda_a(λA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
       end = timing::read();
       trace.push_back(end - begin);
-      // logging::out << std::setw(14) << std::fixed << end - begin 
-      //  << " s # " << "Computed λA (D - FT * M \\ F)." << std::endl;
+      
+      // Setup direct solver.  
+      begin = timing::read();
+      initialize_lambda(λA, piv, sbp);
+      end = timing::read();
+      trace.push_back(end - begin);
     }
     else {
       trace.push_back(0);
+      trace.push_back(0);
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
 
     // Compute Mx = g
     real_t *Mg;
@@ -254,43 +270,26 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     real_t *λb_reduced = nullptr;
     sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
-    if (sbp.rank == 0) {
-      λb_reduced = (double *) mkl_malloc(sz, 64);
-      begin = timing::read();
-    }
+    λb_reduced = (double *) mkl_malloc(sz, 64);
 
+    int err = 0;
     sz = sbp.n * sbp.n_interfaces;
-    MPI_Reduce(λb, λb_reduced, sz, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
 
-    if (sbp.rank == 0) {
-      end = timing::read();
-      trace.push_back(end - begin);
-    }
-
-    if (sbp.rank == 0) {
-      // Allocate pivot table memory.
-      MKL_INT *piv = (MKL_INT *) mkl_malloc(
-        sizeof(MKL_INT) * sbp.n * sbp.n_interfaces, 64);
-      memset(piv, 0, sizeof(MKL_INT) * sbp.n * sbp.n_interfaces);
+    begin = timing::read();
+    err = MPI_Reduce(λb, λb_reduced, sz, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+    end = timing::read();
     
-      // Compute λ
-      begin = timing::read();
-      initialize_lambda(λA, piv, sbp);
-      end = timing::read();
-      trace.push_back(end - begin);
-      // logging::out << std::setw(14) << std::fixed << end - begin
-      //  << " s # " << "Factorized λA." << std::endl;
+    trace.push_back(end - begin);
 
+    std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << err << std::endl;
+
+    if (sbp.rank == 0) {
       begin = timing::read();
       compute_lambda(λA, piv, λb, sbp);
       end = timing::read();
       trace.push_back(end - begin);
-      // logging::out << std::setw(14) << std::fixed << end - begin
-      //  << " s # " << "Computed λ (λA \\ λb)." << std::endl;
     }
     else {
-      trace.push_back(0);
-      trace.push_back(0);
       trace.push_back(0);
     }
 
@@ -298,19 +297,17 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     if (sbp.rank == 0) {
       std::memcpy(λb, λb_reduced, sz);
       mkl_free(λb_reduced);
-      begin = timing::read();
-    }
-    
-    sz = sbp.n * sbp.n_interfaces;
-    MPI_Bcast(λb, sz, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-    if (sbp.rank == 0) {
-      end = timing::read();
-      trace.push_back(end - begin);
     }
     else {
-      trace.push_back(0);
+      mkl_free(λb_reduced);
     }
+
+    begin = timing::read();
+    sz = sbp.n * sbp.n_interfaces;
+    MPI_Bcast(λb, sz, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    end = timing::read();
+
+    trace.push_back(end - begin);
 
     // Allocated right-hand side memory. 
     real_t *rhs;
@@ -368,8 +365,8 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     if(sbp.rank == 0) {
       sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks; 
       uu = (double *) mkl_malloc(sz, 64);
-      begin = timing::read();
     }
+    begin = timing::read();
 
     sz = sbp.n * sbp.n * sbp.rank_limit_u;  
     MPI_Gatherv(
@@ -383,20 +380,17 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       0,              // receiving rank 
       MPI_COMM_WORLD);
 
-    if(sbp.rank == 0) {
-      end = timing::read();
-      trace.push_back(end - begin);
-    }
-    else {
-      trace.push_back(0);
-    }
+    end = timing::read();
+    trace.push_back(end - begin);
         
     // Cleanup everything we allocated.
     for (auto &e: M) {
       for (auto &ee: e)
         mkl_sparse_destroy(ee);
     }
-    mkl_free(λA);
+    if (sbp.rank == 0) {
+      mkl_free(λA);
+    }
     mkl_sparse_destroy(D);
     // mkl_free(λ);
     mkl_free(u);
@@ -414,10 +408,10 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
           "F                 ",
           "X=M^-1F           ",
           "(Rank 0) λA=D-F^TX",
+          "(Rank 0) LL^T=λA  ",
           "x=M^-1g           ",
           "λb=-F^Tx          ",
           "Reduce sum λb     ",
-          "(Rank 0) LL^T=λA  ",
           "(Rank 0) λ=λ^-1λb ",
           "Broadcast λ       ",
           "b=g-Fλ            ",
