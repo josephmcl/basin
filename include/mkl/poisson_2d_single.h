@@ -20,7 +20,6 @@
 #include "compute_rhs.h"
 #include "compute_u.h"
 #include "logging.h"
-#include "poisson_2d_single.h"
 
 #include "omp.h"
 #include "mkl.h"
@@ -39,6 +38,6 @@
 
 namespace poisson_2d {
 
-    void problem(std::size_t vln, std::size_t eln);
+    void single(components &sbp);
 
-}
+} 

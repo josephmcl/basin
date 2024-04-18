@@ -15,7 +15,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto sbp = components{n, span};
 
-    sbp.τ = 42.; // hard code these coeffs for now. 
+    sbp.τ = 1.; // hard code these coeffs for now. 
     sbp.β = 1.;
 
     auto gw = [](real_t x, real_t y){return std::sin(π * x + π * y);};
@@ -25,7 +25,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     // Multiply by 2 here because u_xx == u_yy
     auto source_function = [](real_t x, real_t y) {
-        return 2. * (-π * π * sin(π * x + π * y));};
+        return -2. * π * π * sin(π * x + π * y);};
 
     vv<std::size_t> interfaces;
     std::size_t n_interfaces = make_connectivity(interfaces, l_blocks);
@@ -80,6 +80,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     //
 
     // mkl_set_num_threads(sbp.n_threads);
+
+    if (sbp.n_blocks == 1) {
+      single(sbp);
+      return;
+    }
 
     // Compute flux components used by b. 
     std::vector<sparse_matrix_t> B;
@@ -382,7 +387,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     end = timing::read();
     trace.push_back(end - begin);
-        
     // Cleanup everything we allocated.
     for (auto &e: M) {
       for (auto &ee: e)
@@ -393,6 +397,14 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     }
     mkl_sparse_destroy(D);
     // mkl_free(λ);
+    if (sbp.rank == 0) {
+      for (std::size_t i = 0; i != sbp.n * sbp.n_blocks_dim; ++i) {
+        for (std::size_t j = 0; j != sbp.n * sbp.n_blocks_dim; ++j) {
+            std::cout << uu[i * sbp.n * sbp.n_blocks_dim + j] << " ";
+        }
+        // std::cout << std::endl;
+      }
+    }
     mkl_free(u);
 
     mkl_free(boundary_solution);

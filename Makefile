@@ -11,6 +11,7 @@ mkl_target = lab-mkl
 # cc = g++-13
 
 cc = g++ -mkl -DMKL
+cc = mpicxx -mkl -DMKL
 
 source_ext = cpp
 header_directory = include

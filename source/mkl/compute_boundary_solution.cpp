@@ -21,8 +21,8 @@ void compute_boundary_solution(
             auto range = ranges[j];            
             for (auto e = range.begin(); e != range.end(); ++e) {
                 (*g)[(I * i) + (J * j) + e.index] = (i < 2) 
-                    ? bf[i](b[i], *e) 
-                    : bf[i](*e, b[i]);
+                    ? bf[i](b[i], *e) // E/W boundary
+                    : bf[i](*e, b[i]); // N/S boundary
             }
         }
     }
