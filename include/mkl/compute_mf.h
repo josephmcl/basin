@@ -18,6 +18,7 @@ using real_t = type::real_t;
 
 void compute_mf(
   std::vector<real_t *>        &x,
-  vv<sparse_matrix_t> &m,
+  std::vector<real_t *>        &m,
+  std::vector<int *>        &mpiv,
   std::vector<real_t *>        &f,
   components             const &sbp);

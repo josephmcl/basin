@@ -5,24 +5,55 @@
 // M-index major and F-index minor. 
 void compute_mf(
   std::vector<real_t *>        &x,
-  vv<sparse_matrix_t> &m,
+  std::vector<real_t *>        &m,
+  std::vector<int *>        &mpiv,
   std::vector<real_t *>        &f,
   components             const &sbp) {
   
   sparse_status_t status;
 
+  /*
+  for (std::size_t p = 0; p != sbp.n; ++p) {
+    for (std::size_t k = 0; k != sbp.n*sbp.n; ++k) {
+      std::cout << f[1][p * sbp.n*sbp.n + k]  << " ";
+    }
+    std::cout << std::endl;
+  }
+  */
+  
   std::size_t l;
   #pragma omp parallel for private(l) collapse(2) 
-  for (std::size_t i = 0; i != m[0].size(); ++i) {
+  for (std::size_t i = 0; i != m.size(); ++i) {
     for (std::size_t j = 0; j != f.size(); ++j) {
       for (std::size_t k = 0; k != sbp.n; ++k) {
         auto td = omp_get_thread_num();
         l = i * f.size() + j;
+        /*
         status = mkl_sparse_d_qr_solve(
           SPARSE_OPERATION_NON_TRANSPOSE, m[td][i], nullptr,
           SPARSE_LAYOUT_COLUMN_MAJOR, 1, &x[l][sbp.n * sbp.n * k] , sbp.n, 
           &f[j][sbp.n * sbp.n * k], sbp.n);
         mkl_sparse_status(status);
+        */
+        std::memcpy(
+          &x[l][sbp.n * sbp.n * k], 
+          &f[j][sbp.n * sbp.n * k], 
+          sbp.n * sbp.n * sizeof(double));
+        auto res = LAPACKE_dgetrs(
+          LAPACK_COL_MAJOR, 
+          'N', // No transpose
+          sbp.n * sbp.n, // Rows in A & b
+          1, // Number of RHS in b 
+          m[i], 
+          sbp.n * sbp.n, // lda 
+          mpiv[i], 
+          &x[l][sbp.n * sbp.n * k], // RHS
+          sbp.n * sbp.n); // 
+
+        if (res != 0) {
+          std::cout << res << std::endl;
+        }
+        
       }
     }
   }

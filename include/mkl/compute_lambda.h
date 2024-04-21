@@ -11,6 +11,8 @@
 #include "mkl_spblas.h"
 #include "mkl_sparse_qr.h"
 
+#include <iomanip>
+
 void initialize_lambda(
     double *lambdaA,
     MKL_INT *piv,

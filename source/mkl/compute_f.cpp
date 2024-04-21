@@ -51,31 +51,45 @@ void fcompop(
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_NON_TRANSPOSE, da, bl,
         SPARSE_OPERATION_NON_TRANSPOSE, db, b,
-        SPARSE_STAGE_FULL_MULT, &temp1);
+        SPARSE_STAGE_FULL_MULT, &temp1); // <--
     mkl_sparse_status(status);
 
     status = mkl_sparse_d_add(
     SPARSE_OPERATION_NON_TRANSPOSE, tl, 1., 
-        temp1, &temp2);
+        temp1, 
+        &temp2); // <--
     mkl_sparse_status(status);
 
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_NON_TRANSPOSE, da, temp2,
         SPARSE_OPERATION_NON_TRANSPOSE, db, h,
-        SPARSE_STAGE_FULL_MULT, f);
+        SPARSE_STAGE_FULL_MULT, f); // <--
     mkl_sparse_status(status);
 
-    status = mkl_sparse_sp2m(
-        SPARSE_OPERATION_NON_TRANSPOSE, da, temp2,
-        SPARSE_OPERATION_NON_TRANSPOSE, db, h,
-        SPARSE_STAGE_FULL_MULT, f);
-    mkl_sparse_status(status);
+    //status = mkl_sparse_sp2m(
+    //    SPARSE_OPERATION_NON_TRANSPOSE, da, temp2,
+    //     SPARSE_OPERATION_NON_TRANSPOSE, db, h,
+    //     SPARSE_STAGE_FULL_MULT, f);
+    //mkl_sparse_status(status);
 
     // sparse_status_t mkl_sparse_d_spmmd (const sparse_operation_t operation, const sparse_matrix_t A, const sparse_matrix_t B, const sparse_layout_t layout, double *C, const MKL_INT ldc);
     status = mkl_sparse_d_spmmd(
         SPARSE_OPERATION_NON_TRANSPOSE, 
         temp2, h, SPARSE_LAYOUT_ROW_MAJOR, 
         f_dense, n * n);
+    mkl_sparse_status(status);
+
+    /*
+    for (std::size_t s = 0; s != n * n; ++s) {
+        for (std::size_t k = 0; k != n ; ++k) {
+          std::cout << f_dense[s * n + k] << " "; // -= bc *-1 on D- FTMF
+        }
+        std::cout << std::endl;
+      }
+      std::cout << std::endl;
+    */
+
+      
     /*status = mkl_sparse_d_sp2md(
         SPARSE_OPERATION_TRANSPOSE, da, temp2,
         SPARSE_OPERATION_TRANSPOSE, db, h,

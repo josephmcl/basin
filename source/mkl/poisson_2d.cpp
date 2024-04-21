@@ -1,5 +1,4 @@
 #include "poisson_2d.h"
-#include "timing.h"
 
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     
@@ -15,7 +14,8 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto sbp = components{n, span};
 
-    sbp.τ = 1.; // hard code these coeffs for now. 
+    sbp.τ = (2/ span) + (2 / (span * (span/(n - 1)))); 
+    // sbp.τ = 42.; // hard code these coeffs for now. 
     sbp.β = 1.;
 
     auto gw = [](real_t x, real_t y){return std::sin(π * x + π * y);};
@@ -82,6 +82,9 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // mkl_set_num_threads(sbp.n_threads);
 
     if (sbp.n_blocks == 1) {
+      std::cout << "SINGLE BLOCK CASE" << std::endl 
+        << " | Problem size: " << n_points_x << " x " << n_points_x 
+        << std::endl;
       single(sbp);
       return;
     }
@@ -138,15 +141,20 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto trace = std::vector<double>();
     
-    auto M = vv<sparse_matrix_t>();
-    M.resize(sbp.n_threads);
-    for (auto &e: M) {
-      e.resize(3);
+    auto M = std::vector<double *>();
+    auto Mpiv = std::vector<int *>();
+    M.resize(3);
+    Mpiv.resize(3);
+    for (std::size_t j = 0; j != M.size(); ++j) {
+      M[j] = (double *) mkl_malloc(sizeof(double) * sbp.n * sbp.n * sbp.n * sbp.n, 64);     
+      for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.n * sbp.n; ++i) {
+        M[j][i] = 0.;
+      }
     }
     auto begin = timing::read();
-    make_m(&M[0][0], sbp, {1, 1, 2, 1});
-    make_m(&M[0][1], sbp, {1, 1, 1, 1});
-    make_m(&M[0][2], sbp, {1, 1, 1, 2});
+    make_m(M[0], sbp, {1, 1, 2, 1});
+    make_m(M[1], sbp, {1, 1, 1, 1});
+    make_m(M[2], sbp, {1, 1, 1, 2});
     auto end = timing::read();
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin
@@ -155,22 +163,21 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     sparse_status_t status;
     matrix_descr dc;
     dc.type = SPARSE_MATRIX_TYPE_GENERAL;
-    for (std::size_t i = 1; i != M.size(); ++i) {
-      status = mkl_sparse_copy(M[0][0], dc, &M[i][0]);
-      mkl_sparse_status(status);
-      status = mkl_sparse_copy(M[0][1], dc, &M[i][1]);
-      mkl_sparse_status(status);
-      status = mkl_sparse_copy(M[0][2], dc, &M[i][2]);
-      mkl_sparse_status(status);
-    }
-    for (std::size_t i = 0; i != M.size(); ++i) {
-      for (std::size_t j = 0; j != M[i].size(); ++j) {
-      
-        status = mkl_sparse_qr_reorder(M[i][j], dc);
-        mkl_sparse_status(status);
 
-        status = mkl_sparse_d_qr_factorize(M[i][j], nullptr);
-        mkl_sparse_status(status);
+    for (std::size_t i = 0; i != M.size(); ++i) {
+      Mpiv[i] = (int *) mkl_malloc(sizeof(int) * sbp.n * sbp.n, 64);
+      std::memset(Mpiv[i], 0, sizeof(int) * sbp.n * sbp.n);
+      auto res = LAPACKE_dgetrf(
+        LAPACK_COL_MAJOR, 
+        sbp.n * sbp.n, 
+        sbp.n * sbp.n, 
+        M[i], 
+        sbp.n * sbp.n, 
+        Mpiv[i]);
+
+      if (res != 0) {
+        std::cout << "Error factoring M " << i << " code " 
+          << res << std::endl;
       }
     }
 
@@ -186,7 +193,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     
     std::vector<real_t *> MF;
-    MF.resize(M[0].size() * Fdense.size());
+    MF.resize(M.size() * Fdense.size());
     for (std::size_t index = 0; index != MF.size(); ++index) {
         MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
         memset(MF[index], 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n);
@@ -194,7 +201,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     
     // Compute solve of MX = F.
     begin = timing::read();
-    compute_mf(MF, M, Fdense, sbp);
+    compute_mf(MF, M, Mpiv, Fdense, sbp);
     end = timing::read();
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin 
@@ -208,7 +215,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // Setup interface list.
     vv<std::size_t> lambda_indices;
     make_interface_list(lambda_indices, F_symbols, FT_symbols, sbp);
-
+    
     double *λA = nullptr;
     MKL_INT *piv = nullptr;
     if (sbp.rank == 0) {
@@ -254,7 +261,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     memset(Mg, 0, sz);
 
     begin = timing::read();
-    compute_mg(Mg, M, g, sbp);
+    compute_mg(Mg, M, Mpiv, g, sbp);
     end = timing::read();
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin 
@@ -344,7 +351,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     // Compute solution. u = M \ b.
     begin = timing::read();
-    compute_u(u, M, rhs, sbp);
+    compute_u(u, M, Mpiv, rhs, sbp);
     end = timing::read();
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin
@@ -389,22 +396,17 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     trace.push_back(end - begin);
     // Cleanup everything we allocated.
     for (auto &e: M) {
-      for (auto &ee: e)
-        mkl_sparse_destroy(ee);
+      //for (auto &ee: e)
+      //  mkl_sparse_destroy(ee);
+      mkl_free(e);
     }
     if (sbp.rank == 0) {
       mkl_free(λA);
     }
     mkl_sparse_destroy(D);
     // mkl_free(λ);
-    if (sbp.rank == 0) {
-      for (std::size_t i = 0; i != sbp.n * sbp.n_blocks_dim; ++i) {
-        for (std::size_t j = 0; j != sbp.n * sbp.n_blocks_dim; ++j) {
-            std::cout << uu[i * sbp.n * sbp.n_blocks_dim + j] << " ";
-        }
-        // std::cout << std::endl;
-      }
-    }
+  
+    
     mkl_free(u);
 
     mkl_free(boundary_solution);
@@ -473,7 +475,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       MPI_Gather(&trace[0], offset, MPI_DOUBLE, NULL, offset, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }    
     
-
     return;
 }
 

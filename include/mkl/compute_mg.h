@@ -15,7 +15,8 @@
 
 void compute_mg(
     real_t *Mg,
-    vv<sparse_matrix_t> &M,
+    std::vector<double *> &M,
+    std::vector<int *> &Mpiv,
     real_t *g,
     components &sbp);
 

@@ -2,7 +2,8 @@
 
 void compute_u(
     real_t *u,
-    vv<sparse_matrix_t> &M,
+   std::vector<double *> &M,
+   std::vector<int *> &Mpiv,
     real_t *rhs, 
     components &sbp) {  
 
@@ -20,11 +21,27 @@ void compute_u(
         up = &u[i * sbp.n * sbp.n];
         rp = &rhs[i * sbp.n * sbp.n];
         k = mi[ii % sbp.n_blocks_dim];
+        std::memcpy(up, rp, sbp.n * sbp.n * sizeof(double));
+        auto res = LAPACKE_dgetrs(
+          LAPACK_COL_MAJOR, 
+          'N', // No transpose
+          sbp.n * sbp.n, // Rows in A & b
+          1, // Number of RHS
+          M[k], 
+          sbp.n * sbp.n, // lda 
+          Mpiv[k], 
+          up, // RHS
+          sbp.n * sbp.n); // 
+          if (res != 0) {
+          std::cout << res << std::endl;
+        }
+        /*
         status = mkl_sparse_d_qr_solve(
             SPARSE_OPERATION_NON_TRANSPOSE, M[td][k], nullptr,
             SPARSE_LAYOUT_COLUMN_MAJOR, 1, up , sbp.n * sbp.n, 
             rp, sbp.n * sbp.n);
         mkl_sparse_status(status);
+        */
     }    
     return;
 }

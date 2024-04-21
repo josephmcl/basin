@@ -4,12 +4,12 @@ std::size_t constexpr dirichlet = 1;
 std::size_t constexpr neumann   = 2;
 
 void make_m(
-  sparse_matrix_t                  *M,
+  double *M,
   components                       &sbp, 
   std::array<std::size_t, 4> const &boundary) {
 
   sparse_matrix_t Mb1, Mb2, Mb3, Mb4;
-  sparse_matrix_t temp1, temp3, temp4, temp5, temp6; 
+  sparse_matrix_t temp1, temp3, temp4, temp5, temp6, temp7; 
   sparse_matrix_t dd2x, dd2y, hhl; 
   
   // MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
@@ -66,8 +66,21 @@ void make_m(
 
   status = mkl_sparse_d_add(
       SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
-      temp6, M);
+      temp6, &temp7);
   mkl_sparse_status(status);
+
+  csr<double> eye(sbp.n * sbp.n, sbp.n * sbp.n);
+  for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+    eye(1., i, i);
+  }
+  sparse_matrix_t aye;
+  status = eye.mkl(&aye);
+
+  status = mkl_sparse_d_spmmd(
+      SPARSE_OPERATION_NON_TRANSPOSE, temp7, aye, 
+      SPARSE_LAYOUT_COLUMN_MAJOR, M, sbp.n * sbp.n);
+  mkl_sparse_status(status);
+
 
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);

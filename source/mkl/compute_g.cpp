@@ -34,7 +34,7 @@ void compute_g(
     std::size_t relblock; 
     for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
         
-        std::cout << "block " << block << std::endl;
+        //std::cout << "block " << block << std::endl;
 
         relblock = sbp.rank_index_u[block];
         // block is the local index local -> 0, 1, 2, ... 
@@ -50,7 +50,7 @@ void compute_g(
             auto b_type_index = boundary_type_map[relblock][face];
             if (b_type_index != 0) {
                 
-                std::cout << "face - " << face + ((b_type_index - 1) * faces) << std::endl;
+                // std::cout << "face - " << face + ((b_type_index - 1) * faces) << std::endl;
                 // ti gives face + b_type_index 
                 auto ti = face + ((b_type_index - 1) * faces);
                 auto boundary = boundaries[ti];
@@ -64,7 +64,7 @@ void compute_g(
                 auto di = boundary_data_map[relblock][face] - 1;
                 solution = &solutions[0] + (face * face_size) + (di * sbp.n);
 
-                std::cout << "solu - " << (face * face_size) + (di * sbp.n) << std::endl;
+                // std::cout << "solu - " << (face * face_size) + (di * sbp.n) << std::endl;
 
                 // gi += boundary:matrix * solution:vector
                 status = mkl_sparse_d_mv(

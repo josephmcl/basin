@@ -20,6 +20,8 @@
 #include "compute_rhs.h"
 #include "compute_u.h"
 #include "logging.h"
+#include "timing.h"
+
 
 #include "omp.h"
 #include "mkl.h"

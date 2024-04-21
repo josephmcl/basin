@@ -16,8 +16,6 @@ namespace timing {
 		arm = 3 // "__aarch64__"
 
 	};
-
-	static double tsc_timer_ticks_per_second = 0.0;
 	
     class tsc_count {
     public:
@@ -25,10 +23,7 @@ namespace timing {
         tsc_count(uint64_t value): value{value} {};
     };
 
-    auto operator -(tsc_count lhs, tsc_count rhs) -> double {
-        return static_cast<double>(lhs.value - rhs.value) 
-            / tsc_timer_ticks_per_second;
-    }
+    auto operator -(tsc_count lhs, tsc_count rhs) -> double;
 
 	template<architecture arch> uint64_t read_() {
 
@@ -61,20 +56,8 @@ namespace timing {
 		}
 	}	
 
-	#if defined(__aarch64__)
-		auto read = [](){return tsc_count(read_<architecture::arm>());};
-	#elif defined(__x86_64__)
-		auto read = [](){return tsc_count(read_<architecture::x86>());};
-	#endif
+	tsc_count read();
 
-    void init(void) {
-        auto start = read();
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        auto stop = read();
-        tsc_timer_ticks_per_second = static_cast<double>(
-            stop.value - start.value);
-        std::cout << "tsc_timer_ticks_per_second: " 
-            << tsc_timer_ticks_per_second << std::endl;
-    }
+    void init(void);
 }
 

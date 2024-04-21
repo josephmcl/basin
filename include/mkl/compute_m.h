@@ -10,7 +10,7 @@
 
 
 void make_m(
-  sparse_matrix_t                  *M,
+  double *M,
   components                       &sbp, 
   std::array<std::size_t, 4> const &boundary);
 

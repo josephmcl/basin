@@ -1,7 +1,6 @@
 
 
 #include "poisson_2d_single.h"
-//#include "timing.h"
 
 void poisson_2d::single(components &sbp) {
     
@@ -24,6 +23,7 @@ void poisson_2d::single(components &sbp) {
     vv<std::size_t> boundary_order_map;
     make_boundary_maps(boundary_data_map, boundary_order_map, sbp.n_blocks_dim);
 
+    /*
     for (auto r : boundary_data_map) {
         for (auto e : r) {
         std::cout << std::setw(4);
@@ -41,6 +41,7 @@ void poisson_2d::single(components &sbp) {
         }
         std::cout << std::endl;
     }
+    */
 
     // Generate ranges for the x and y of each block, given the number of 
     // blocks in each dimension.
@@ -60,6 +61,7 @@ void poisson_2d::single(components &sbp) {
     real_t *sources;
     compute_sources(&sources, grids, source_function);
 
+    /*
     for (std::size_t i = 0; i != sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n; ++j) {
             std::cout << source_function(static_cast<real_t>(i) / static_cast<real_t>(sbp.n - 1), static_cast<real_t>(j) / static_cast<real_t>(sbp.n - 1)) << " ";
@@ -68,6 +70,7 @@ void poisson_2d::single(components &sbp) {
     }
     std::cout << std::endl;
 
+    
     std::cout << "g" << std::endl;
     for (std::size_t i = 0; i != sbp.n; ++i) {
         std::cout << gw(0, static_cast<real_t>(i) / static_cast<real_t>(sbp.n - 1)) << " ";
@@ -92,13 +95,19 @@ void poisson_2d::single(components &sbp) {
         }
         std::cout << std::endl;
     }
+    */
     
+
 
     // Compute the hybrid system g terms. 
     real_t *g;
+
+    auto begin = timing::read();
     compute_g(&g, B, boundary_solution, sources, boundary_order_map, 
     boundary_data_map, sbp); 
-
+    auto end = timing::read();
+    std::cout << "compute g, " << end - begin << std::endl;
+    /*
     for (std::size_t i = 0; i != sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n; ++j) {
             std::cout << g[i * sbp.n + j] << " ";
@@ -114,7 +123,8 @@ void poisson_2d::single(components &sbp) {
         std::cout << std::endl;
     }
      std::cout << std::endl;
-
+    */
+   /*
     sparse_matrix_t A;
     make_m(&A, sbp, {1, 1, 2, 2});
 
@@ -122,24 +132,77 @@ void poisson_2d::single(components &sbp) {
     matrix_descr dc;
     dc.type = SPARSE_MATRIX_TYPE_GENERAL;
 
+    begin = timing::read();
     status = mkl_sparse_qr_reorder(A, dc);
     mkl_sparse_status(status);
 
     status = mkl_sparse_d_qr_factorize(A, nullptr);
     mkl_sparse_status(status);
+    end = timing::read();
+    std::cout << "factorize A, " << end - begin << std::endl;
 
     real_t *u = (real_t *) mkl_malloc(
           sizeof(double) * sbp.n * sbp.n, 64);
     for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         u[i] = 0;
     }
+
+
+    MKL_INT n = sbp.n * sbp.n;
+    MKL_INT request;
+    MKL_INT ipar[128];
+    ipar[1] = 6;
+    double dpar[128];
+    double *tmp = (double *) mkl_malloc(sizeof(double) * sbp.n * sbp.n * 4, 64);
+    dcg_init(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+
+    std::cout << "request: " << (int) request << std::endl;
+
+    dcg_check(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+
+    std::cout << "request: " << (int) request << std::endl;
+
+    matrix_descr md;
+    md.type = SPARSE_MATRIX_TYPE_GENERAL;
+    bool converged = false;
+    request = 1;
+    begin = timing::read();
+    while (!converged) {
+        dcg(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+        if (request == 1) {
+            // compute tmp[n^2] = A * tmp[0]
+            status = mkl_sparse_d_mv(
+                SPARSE_OPERATION_NON_TRANSPOSE, 1., 
+                A, md,
+                &tmp[0], 
+                1., &tmp[sbp.n * sbp.n]);
+            mkl_sparse_status(status);
+        }
+        else if (request == 0) {
+            converged = true;
+        }
+    }
+    end = timing::read();
+
+    std::cout << "conj grad: " << end - begin << std::endl;
+
+    std::cout << "request: " << (int) request << std::endl;
     
+
+    MKL_INT niter;
+    dcg_get(&n, u, g, &request, (int *) ipar, (double *) dpar, tmp, &niter);
+    std::cout << "iterations: " << niter << std::endl;
+    
+    begin = timing::read();
     status = mkl_sparse_d_qr_solve(
         SPARSE_OPERATION_NON_TRANSPOSE, A, nullptr,
         SPARSE_LAYOUT_COLUMN_MAJOR, 1, u , sbp.n * sbp.n, 
         g, sbp.n * sbp.n);
     mkl_sparse_status(status);
-
+    end = timing::read();
+    std::cout << "direct solve, " << end - begin << std::endl;
+    */
+    /*
     for (std::size_t i = 0; i != sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n; ++j) {
             std::cout << u[i * sbp.n + j] << " ";
@@ -147,7 +210,7 @@ void poisson_2d::single(components &sbp) {
         // std::cout << std::endl;
     }
     std::cout << std::endl; std::cout << std::endl; std::cout << std::endl;
-
+    */
     /*
     double *errv = (double *) malloc(sizeof(double) * sbp.n * sbp.n);
     double *err = (double *) malloc(sizeof(double) * sbp.n * sbp.n);

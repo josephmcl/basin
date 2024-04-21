@@ -104,8 +104,8 @@ components::make_h1() {
   for (std::size_t i = 1; i != n - 1; ++i) {
     //MatSetValue(h1x, i, i, spacing, ADD_VALUES);
     //MatSetValue(h1y, i, i, spacing, ADD_VALUES);
-    h1x(v, i, i);
-    h1y(v, i, i);
+    h1x(spacing, i, i);
+    h1y(spacing, i, i);
     h1v.push_back(spacing);
   }
   //MatSetValue(h1x, n - 1, n - 1, v, ADD_VALUES);

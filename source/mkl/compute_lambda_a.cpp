@@ -101,7 +101,7 @@ auto compute_lambda_a_mpi(
   }
 
   std::size_t v;
-  #pragma omp parallel for private(v) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(v) num_threads(sbp.n_threads)
   for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
     v = j % sbp.n;
     lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.τ;
@@ -131,19 +131,58 @@ auto compute_lambda_a(
   double *ftmf, *FTMF, *lat;
   std::size_t sz = sizeof(double) * sbp.n * sbp.n * F.size() * MF.size();
   FTMF = (double *) mkl_malloc(sz, 64);
-  std::memset(FTMF, 0, sz);
+  for (std::size_t i = 0; i < sbp.n * sbp.n * F.size() * MF.size(); ++i) {
+    FTMF[i] = 0;
+  }
   sparse_status_t status;
 
-  #pragma omp parallel for private(ftmf) collapse(2) num_threads(sbp.n_threads)
-  for (std::size_t i = 0; i != MF.size(); ++i) {
-    for (std::size_t j = 0; j != F.size(); ++j) {
-      ftmf = &FTMF[(i * F.size() + j) * sbp.n * sbp.n];
+
+  // data layout: 
+  // [ ft block -- 4                ]
+  // [ m block -- 3         ]
+  // [f block -- 4]
+  // #pragma omp parallel for private(ftmf) collapse(2) num_threads(sbp.n_threads)
+  for (std::size_t i = 0; i != F.size(); ++i) {
+    for (std::size_t j = 0; j != MF.size(); ++j) {
+      ftmf = &FTMF[(i * MF.size() + j) * sbp.n * sbp.n];
+      
       status = mkl_sparse_d_mm(
-        SPARSE_OPERATION_NON_TRANSPOSE, 1., F[j], da, 
-        SPARSE_LAYOUT_COLUMN_MAJOR, MF[i],
+        SPARSE_OPERATION_NON_TRANSPOSE, 1., F[i], da, 
+        SPARSE_LAYOUT_COLUMN_MAJOR, MF[j],
         sbp.n, sbp.n * sbp.n, 
         1., ftmf, sbp.n);
       mkl_sparse_status(status);
+
+      /*
+      if (i * MF.size() + j == 8 || i * MF.size() + j == 21) {
+        std::cout << i << " " << j << std::endl;
+        std::cout << (i * MF.size() + j) * sbp.n * sbp.n <<  std::endl;
+        for (std::size_t p = 0; p != sbp.n; ++p) {
+          for (std::size_t k = 0; k != sbp.n; ++k) {
+            std::cout << -ftmf[p * sbp.n + k]  << " ";
+          }
+          std::cout << std::endl;
+        }
+        std::cout << "mf " << j << std::endl;
+        std::cout << std::endl;
+        for (std::size_t p = 0; p != sbp.n * sbp.n; ++p) {
+          for (std::size_t k = 0; k != sbp.n; ++k) {
+            std::cout << MF[j][p * sbp.n + k]  << " ";
+          }
+          std::cout << std::endl;
+        }
+        
+      }
+      */
+      /*
+      for (std::size_t s = 0; s != sbp.n; ++s) {
+        for (std::size_t k = 0; k != sbp.n; ++k) {
+          std::cout << ftmf[s * sbp.n + k] << " "; // -= bc *-1 on D- FTMF
+        }
+        std::cout << std::endl;
+      }
+      std::cout << std::endl;
+      */
     }
   }
 
@@ -219,28 +258,45 @@ auto compute_lambda_a(
   
 
   // Copy each block into a new array, sometimes wit
-  std::size_t a, b, c, d, mindex, findex;
+  std::size_t a, b, c, d, mindex, findex, ftindex, index;
   //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) // num_threads(sbp.n_threads)
   for (std::size_t i = 0; i < interface_list.size(); i += 4) {
     a = interface_list[i];
     b = interface_list[i + 1];
     c = interface_list[i + 2];
     d = interface_list[i + 3];
-    findex = FT_symbols[a][c] - 1;
+    ftindex = FT_symbols[a][c] - 1;
+    findex = F_symbols[c][b] - 1;
     auto r = c % sbp.n_blocks_dim == 0 ? 0 
           : c % sbp.n_blocks_dim == sbp.n_blocks_dim - 1 ? 2 
           : 1;
-    mindex = (r * 4) + F_symbols[c][b] - 1;
+    // mindex = (r * 4) + F_symbols[c][b] - 1;
     // std::cout << i / 4 << " " << mindex << " " << findex << 
     //   " " << mindex * F.size() + findex <<std::endl;
-    ftmf = &FTMF[(mindex * F.size() + findex) * sbp.n * sbp.n];
+    index = ((ftindex * MF.size()) + (r * 4) + findex) * sbp.n * sbp.n;
+    ftmf = &FTMF[index];
     
-    // std::size_t kl;
-    
-    
+    //std::cout << "FT " << FT_symbols[a][c] - 1 << std::endl;
+    //std::cout << "F " << F_symbols[c][b] - 1 << std::endl;
+    //std::cout << "M " << r << std::endl;
+    //std::cout << a << " " << b << std::endl;
+
+    /*
+    if (a == 11 && b == 11) {
+      for (std::size_t j = 0; j != sbp.n; ++j) {
+        for (std::size_t k = 0; k != sbp.n; ++k) {
+          std::cout << -ftmf[j * sbp.n + k]  << " ";
+        }
+        std::cout << std::endl;
+      }
+      
+    }
+    */
+    //std::cout << index / (sbp.n * sbp.n) << std::endl;
+    //std::cout << std::endl;
 
     for (std::size_t j = 0; j != sbp.n; ++j) {
-      lat = &lambdaA[((j + (a * sbp.n)) * sbp.n_interfaces * sbp.n) + (b * sbp.n)];
+      lat = &lambdaA[((j + (b * sbp.n)) * sbp.n_interfaces * sbp.n) + (a * sbp.n)];
       for (std::size_t k = 0; k != sbp.n; ++k) {
         lat[k] -= ftmf[j * sbp.n + k]; // -= bc *-1 on D- FTMF
         // kl = ((j + (a * sbp.n)) * sbp.n_interfaces * sbp.n) + (b * sbp.n) + k;
@@ -293,7 +349,7 @@ auto compute_lambda_a(
 
 
   std::size_t v;
-  #pragma omp parallel for private(v) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(v) num_threads(sbp.n_threads)
   for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
     v = j % sbp.n;
     lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.τ;

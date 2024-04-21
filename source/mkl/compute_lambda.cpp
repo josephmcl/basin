@@ -43,6 +43,25 @@ void initialize_lambda(
     // omp_set_num_threads(56);
     // mkl_set_num_threads(56);
 
+    /*
+    for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
+        for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
+            //a[(j * sbp.n_interfaces * sbp.n) + i] = a[(i * sbp.n_interfaces * sbp.n) + j];
+        }
+    }
+
+    for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
+        for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
+            std::cout << a[(i * sbp.n_interfaces * sbp.n) + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    */
+
+    //err = LAPACKE_dpotrf(LAPACK_COL_MAJOR, 'L', size, a, size);
+   // if (err != 0)
+       std::cout << "dgetrf err: " << err << std::endl;
+
     dgetrf(&size, &size, a, &size, piv, &err);
     if (err != 0)
         std::cout << "dgetrf err: " << err << std::endl;
@@ -65,12 +84,15 @@ void compute_lambda(
     //std::cout << size << std::endl;
     MKL_INT rhs = 1;
     MKL_INT s;
+    
     dgetrs(
         &t, &size, 
         &rhs, lambdaA, &size,  piv, 
         lambda, &size, &s);
-    if (s != 0)
-            std::cout << "dgetrs err: " << s << std::endl;
+    
+    //s = LAPACKE_dpotrs(LAPACK_COL_MAJOR, 'L', size, 1, lambdaA, size, lambda, size);
+    //if (s != 0)
+    //        std::cout << "dgetrs err: " << s << std::endl;
 
     //mkl_set_num_threads(tds);
 
