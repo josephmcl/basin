@@ -29,7 +29,7 @@ void initialize_lambda(
         // std::size_t v;
         for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
             //v = j % sbp.n;
-            // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.τ;
+            // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.TAU_VALUE;
             std::cout << (j * sbp.n_interfaces * sbp.n) + j << std::endl;
             aa[(j * sbp.n_interfaces * sbp.n) + j] = 2;
         }
@@ -58,13 +58,13 @@ void initialize_lambda(
     }
     */
 
-    //err = LAPACKE_dpotrf(LAPACK_COL_MAJOR, 'L', size, a, size);
-   // if (err != 0)
-       std::cout << "dgetrf err: " << err << std::endl;
-
-    dgetrf(&size, &size, a, &size, piv, &err);
+    err = LAPACKE_dpotrf(LAPACK_COL_MAJOR, 'L', size, a, size);
     if (err != 0)
-        std::cout << "dgetrf err: " << err << std::endl;
+        std::cout << "LAPACK FACTOR err: " << err << std::endl;
+
+    //dgetrf(&size, &size, a, &size, piv, &err);
+    //if (err != 0)
+    //    std::cout << "dgetrf err: " << err << std::endl;
 
     // omp_set_num_threads(tds);
     // mkl_set_num_threads(tds);
@@ -85,14 +85,15 @@ void compute_lambda(
     MKL_INT rhs = 1;
     MKL_INT s;
     
+    /*
     dgetrs(
         &t, &size, 
         &rhs, lambdaA, &size,  piv, 
         lambda, &size, &s);
-    
-    //s = LAPACKE_dpotrs(LAPACK_COL_MAJOR, 'L', size, 1, lambdaA, size, lambda, size);
-    //if (s != 0)
-    //        std::cout << "dgetrs err: " << s << std::endl;
+    */
+    s = LAPACKE_dpotrs(LAPACK_COL_MAJOR, 'L', size, 1, lambdaA, size, lambda, size);
+    if (s != 0)
+            std::cout << "LAPACK SOLVER err: " << s << std::endl;
 
     //mkl_set_num_threads(tds);
 

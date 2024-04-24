@@ -2,7 +2,7 @@
 #include "compute_lambda_b.h"
 
 void compute_lambda_b(
-    real_t *λb, 
+    real_t *LAMBDAb, 
     std::vector<sparse_matrix_t> &Fsparse, 
     real_t *Mg, 
     vv<std::size_t> &FT_symbols, 
@@ -16,12 +16,12 @@ void compute_lambda_b(
     std::size_t findex, j_global;
     double * lb, *mg;
     #pragma omp parallel for collapse(2) private(findex, lb, mg, status) num_threads(7)
-    for (std::size_t i = 0; i != sbp.n_interfaces; ++i) {
-        for (std::size_t j = 0; j != sbp.rank_limit_u; ++j) {
+    for (std::size_t i = 0; i < sbp.n_interfaces; ++i) {
+        for (std::size_t j = 0; j < sbp.rank_limit_u; ++j) {
             j_global = sbp.rank_index_u[j];
             if (FT_symbols[i][j_global] > 0) {
                 findex = FT_symbols[i][j_global] - 1;
-                lb = &λb[i * sbp.n];
+                lb = &LAMBDAb[i * sbp.n];
                 // NOTE: j is the local (rank) index. j_global is the 
                 //       global element index. we use j below because 
                 //       Mg is a rank computation. But we j_global 

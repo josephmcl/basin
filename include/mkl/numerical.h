@@ -16,34 +16,34 @@ using namespace type;
 
 struct operators {
 
-    using ℤ = std::size_t;
-    using ℝ = type::real_t; 
+    using ZEE_TYPE = std::size_t;
+    using REE_TYPE = type::real_t; 
 
     operators(){};
     
     /* Returns finite difference H matrix. */
-    static std::vector<ℝ> 
-    H(ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
+    static std::vector<REE_TYPE> 
+    H(ZEE_TYPE nodes, ZEE_TYPE order=2, REE_TYPE left=-1., REE_TYPE right=1.);
 
-    static std::vector<ℝ> 
-    H_inverse(ℤ nodes, ℤ order=2, ℝ left=-1., ℝ right=1.);
+    static std::vector<REE_TYPE> 
+    H_inverse(ZEE_TYPE nodes, ZEE_TYPE order=2, REE_TYPE left=-1., REE_TYPE right=1.);
 
     struct sbp {
-        using row_p = std::tuple<ℤ, std::vector<ℝ> const *>;
-        using row_t = std::tuple<ℤ, std::vector<ℝ> const>;
-        ℤ const size, order; 
-        ℝ const left, right, grid_size;
-        std::vector<ℝ> d;
-        std::vector<ℝ> h, hi;
-        std::vector<std::vector<ℝ>> top, bottom;
-        std::vector<ℝ> top_boundary_data, bot_boundary_data;
-        sbp(ℤ const size, ℤ const order, ℝ const left, ℝ const right);
+        using row_p = std::tuple<ZEE_TYPE, std::vector<REE_TYPE> const *>;
+        using row_t = std::tuple<ZEE_TYPE, std::vector<REE_TYPE> const>;
+        ZEE_TYPE const size, order; 
+        REE_TYPE const left, right, grid_size;
+        std::vector<REE_TYPE> d;
+        std::vector<REE_TYPE> h, hi;
+        std::vector<std::vector<REE_TYPE>> top, bottom;
+        std::vector<REE_TYPE> top_boundary_data, bot_boundary_data;
+        sbp(ZEE_TYPE const size, ZEE_TYPE const order, REE_TYPE const left, REE_TYPE const right);
         
         /*  Given a const reference to an index, return a reference to 
             a vector of tuples of (size_t, long double) representing 
             the index and the value of rows. */
-        row_p row(ℤ const index) const;
-        row_t rowf(ℤ const index) const;
+        row_p row(ZEE_TYPE const index) const;
+        row_t rowf(ZEE_TYPE const index) const;
 
         /* Return a lambda function that computes SpMV of the current
            state of the operator. Captures a copy of the necessary 
@@ -51,7 +51,7 @@ struct operators {
         auto product() {
             return [size=size, d=d, h=h,  top=top, bottom=bottom, 
                 tbd=top_boundary_data]
-            (std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs){
+            (std::vector<REE_TYPE> const &rhs, std::vector<REE_TYPE> &lhs){
 
                 for (std::size_t i = 0; i != lhs.size(); ++i)
                     lhs[i] = 0.;
@@ -96,11 +96,11 @@ struct operators {
 
     };
     struct d1: sbp {
-        d1(ℤ const size, ℤ const order=2, ℝ const left=-1., 
-           ℝ const right=1.) : sbp(size, order, left, right) {
+        d1(ZEE_TYPE const size, ZEE_TYPE const order=2, REE_TYPE const left=-1., 
+           REE_TYPE const right=1.) : sbp(size, order, left, right) {
             load_operator(); 
-            h = std::vector<ℝ>(size);
-            hi = std::vector<ℝ>(size); 
+            h = std::vector<REE_TYPE>(size);
+            hi = std::vector<REE_TYPE>(size); 
         };
         void load_operator();
     };
@@ -108,20 +108,20 @@ struct operators {
     struct d2: sbp {
 
         
-        std::vector<ℝ> d1_interior;
-        std::vector<std::vector<ℝ>> d1_top, d1_bottom;
+        std::vector<REE_TYPE> d1_interior;
+        std::vector<std::vector<REE_TYPE>> d1_top, d1_bottom;
 
-        d2(ℤ const size, ℤ const order=2, ℝ const left=-1., 
-           ℝ const right=1.) : sbp(size, order, left, right) {
+        d2(ZEE_TYPE const size, ZEE_TYPE const order=2, REE_TYPE const left=-1., 
+           REE_TYPE const right=1.) : sbp(size, order, left, right) {
             load_operator(); 
-            h = std::vector<ℝ>(size); 
+            h = std::vector<REE_TYPE>(size); 
             load_h(); 
-            hi = std::vector<ℝ>(size); 
+            hi = std::vector<REE_TYPE>(size); 
             load_h_inverse(); 
         };
         void load_operator();
-        void fuse(std::vector<ℝ> const &diag);
-        void fuse_hi(std::vector<ℝ> const &diag);
+        void fuse(std::vector<REE_TYPE> const &diag);
+        void fuse_hi(std::vector<REE_TYPE> const &diag);
 
         /* load the H spacing matrix used in computing the matrix-free
            SpMV action */
@@ -133,16 +133,16 @@ struct operators {
         /* Modify the top vector with the appropriate boundary data. 
            degree = 1 for Dirichlet boundary conditions ie. u0 = value, 
            degree = 2 forNeumann boundary conditions ie. du0 = value. */ 
-        void left_boundary(ℝ value, ℤ degree=1);
+        void left_boundary(REE_TYPE value, ZEE_TYPE degree=1);
 
         /* Modify the bottom vector with the appropriate boundary data. 
            degree = 1 for Dirichlet boundary conditions ie. uN = value, 
            degree = 2 forNeumann boundary conditions ie. duN = value. */
-        void right_boundary(ℝ value, ℤ degree=1);
+        void right_boundary(REE_TYPE value, ZEE_TYPE degree=1);
 
-        void left_sat(ℝ value);
+        void left_sat(REE_TYPE value);
 
-        void right_sat(ℝ value);
+        void right_sat(REE_TYPE value);
 
     };
 

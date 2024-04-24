@@ -4,12 +4,12 @@ std::size_t constexpr dirichlet = 1;
 std::size_t constexpr neumann   = 2;
 
 void make_m(
-  double *M,
+  sparse_matrix_t                  *M,
   components                       &sbp, 
   std::array<std::size_t, 4> const &boundary) {
 
   sparse_matrix_t Mb1, Mb2, Mb3, Mb4;
-  sparse_matrix_t temp1, temp3, temp4, temp5, temp6, temp7; 
+  sparse_matrix_t temp1, temp3, temp4, temp5, temp6; 
   sparse_matrix_t dd2x, dd2y, hhl; 
   
   // MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, nullptr, 
@@ -66,22 +66,31 @@ void make_m(
 
   status = mkl_sparse_d_add(
       SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
-      temp6, &temp7);
+      temp6, M);
   mkl_sparse_status(status);
 
+    /*
   csr<double> eye(sbp.n * sbp.n, sbp.n * sbp.n);
-  for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-    eye(1., i, i);
-  }
-  sparse_matrix_t aye;
-  status = eye.mkl(&aye);
+    for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+        eye(1., i, i);
+    }
+      sparse_matrix_t aye;
+    eye.mkl(&aye);
+    double *Adense = (double *) mkl_malloc(sizeof(double) * sbp.n * sbp.n * sbp.n * sbp.n, 64);
+    for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.n * sbp.n; ++i) {
+        Adense[i] = 0.;
+    }
 
-  status = mkl_sparse_d_spmmd(
-      SPARSE_OPERATION_NON_TRANSPOSE, temp7, aye, 
-      SPARSE_LAYOUT_COLUMN_MAJOR, M, sbp.n * sbp.n);
-  mkl_sparse_status(status);
-
-
+    mkl_sparse_d_spmmd(
+        SPARSE_OPERATION_NON_TRANSPOSE, *M, aye, 
+        SPARSE_LAYOUT_ROW_MAJOR, Adense, sbp.n * sbp.n);
+    for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+        for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
+            std::cout << Adense[i * sbp.n * sbp.n + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    */
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);
   status = mkl_sparse_destroy(Mb2);
@@ -137,10 +146,10 @@ void make_m_boundary(
     // finalize<fw>(LT);
     // finalize<fw>(BST);
 
-    auto status = H.mkl(&th, sbp.τ);
+    auto status = H.mkl(&th, sbp.TAU_VALUE);
     mkl_sparse_status(status);
 
-    status = H.mkl(&bh, -sbp.β);
+    status = H.mkl(&bh, -sbp.BETA_VALUE);
     mkl_sparse_status(status);
 
     status = L.mkl(&l);
@@ -161,12 +170,12 @@ void make_m_boundary(
         SPARSE_STAGE_FULL_MULT, &temp2);
     mkl_sparse_status(status);
 
-    // τ*H_y*LW'*LW 
+    // TAU_VALUE*H_y*LW'*LW 
     /*
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp1);
     finalize<fw>(temp1);    
-    MatAXPY(temp1, sbp.τ, H, UNKNOWN_NONZERO_PATTERN);    
+    MatAXPY(temp1, sbp.TAU_VALUE, H, UNKNOWN_NONZERO_PATTERN);    
     MatMatMult(LT, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
     finalize<fw>(temp2);    
     MatMatMult(temp1, temp2, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp3);
@@ -198,12 +207,12 @@ void make_m_boundary(
         temp5, M);
     mkl_sparse_status(status);
 
-    // -β*H_y*BS_x'*LW'*LW 
+    // -BETA_VALUE*H_y*BS_x'*LW'*LW 
     /*
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);
-    MatAXPY(temp4, sbp.β, H, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp4, sbp.BETA_VALUE, H, UNKNOWN_NONZERO_PATTERN);
     MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
     finalize<fw>(temp5);
     MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);
@@ -241,7 +250,7 @@ void make_m_boundary(
     auto status = H.mkl(&h);
     mkl_sparse_status(status);
 
-    status = H.mkl(&th, -1. / sbp.τ);
+    status = H.mkl(&th, -1. / sbp.TAU_VALUE);
     mkl_sparse_status(status);
 
     status = L.mkl(&l);
@@ -292,7 +301,7 @@ void make_m_boundary(
     // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
     // MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
 
-    // -1/τ * H_x * BS_y' * LN' * LN * BS_y 
+    // -1/TAU_VALUE * H_x * BS_y' * LN' * LN * BS_y 
     status = mkl_sparse_sp2m(
         SPARSE_OPERATION_NON_TRANSPOSE, da, th,
         SPARSE_OPERATION_TRANSPOSE, db, bs,
@@ -348,7 +357,7 @@ void make_m_boundary(
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);
-    MatAXPY(temp4, 1. / sbp.τ, H, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp4, 1. / sbp.TAU_VALUE, H, UNKNOWN_NONZERO_PATTERN);
     MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
     finalize<fw>(temp5);
     MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);

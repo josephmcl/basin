@@ -6,10 +6,10 @@ void compute_d(
   components               &sbp, 
   vv<std::size_t> const &interfaces) {
 
-  /* D = [H1y * 2 * τ,                              ]
-         [             H1y * 2 * τ,                 ]
+  /* D = [H1y * 2 * TAU_VALUE,                              ]
+         [             H1y * 2 * TAU_VALUE,                 ]
          [                        , ...,            ]
-         [                               H1y * 2 * τ] 
+         [                               H1y * 2 * TAU_VALUE] 
 
   NOTE: either H1x or H1y for corresponding interface 
         orientations (NS or EW). For now we use h1v because 
@@ -34,7 +34,7 @@ void compute_d(
       if (interface != 0 and row == col - 1) {  // NS 
         index = (interface - 1) * sbp.n; 
         for (std::size_t k = 0; k != sbp.n; ++k) {
-          value = sbp.h1v[k] * 2. * sbp.τ;
+          value = sbp.h1v[k] * 2. * sbp.TAU_VALUE;
           // MatSetValue(D, index + k,  index + k, value, ADD_VALUES);
           // std::cout << value << " " << index + k << std::endl;
           d(value, index + k,  index + k);
@@ -43,7 +43,7 @@ void compute_d(
       else if (interface != 0) {  // EW
         index = (interface - 1) * sbp.n; 
         for (std::size_t k = 0; k != sbp.n; ++k) {
-          value = sbp.h1v[k] * 2. * sbp.τ;
+          value = sbp.h1v[k] * 2. * sbp.TAU_VALUE;
           // std::cout << value << " " << index + k << std::endl;
           // MatSetValue(D, index + k,  index + k, value, ADD_VALUES);
           d(value, index + k,  index + k);

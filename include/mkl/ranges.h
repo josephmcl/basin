@@ -6,7 +6,7 @@
 
     Initial design take from stackoverflow.com/a/56217827 */
 
-#include <ranges>
+// #include <ranges>
 #include <iostream>
 #include <vector>
 #include <functional>
@@ -103,8 +103,8 @@ template <typename T> struct linrange {
         bool operator >= (I const &that) const { 
             return _value >= that._value; } 
 
-        inline std::iter_difference_t<I> operator - (I const &that) const { 
-            return iterator{index - that.index, Linrange}; } 
+        //inline std::iter_difference_t<I> operator - (I const &that) const { 
+        //    return iterator{index - that.index, Linrange}; } 
 
         inline I operator - (std::size_t const &n) const { 
             return iterator{index - n, Linrange}; } 
@@ -116,9 +116,9 @@ template <typename T> struct linrange {
         operator - (const std::size_t &lhs, const I &rhs) {
             return iterator{lhs + rhs.index, rhs.Linrange}; } 
 
-        inline std::iter_difference_t<I> 
-        operator + (I const &that) const { 
-            return iterator{index + that.index, Linrange}; } 
+        //inline std::iter_difference_t<I> 
+        //operator + (I const &that) const { 
+        //    return iterator{index + that.index, Linrange}; } 
 
         inline I 
         operator + (std::size_t const &n) const { 
@@ -131,9 +131,9 @@ template <typename T> struct linrange {
         operator + (const std::size_t &lhs, const I &rhs) {
             return iterator{lhs + rhs.index, rhs.Linrange}; } 
 
-        inline std::iter_reference_t<I> 
-        operator[](const std::size_t &n) { 
-            index = n; return *this;}
+        //inline std::iter_reference_t<I> 
+        //operator[](const std::size_t &n) { 
+        //    index = n; return *this;}
 
         void _inc_impl() { 
             index += 1; 

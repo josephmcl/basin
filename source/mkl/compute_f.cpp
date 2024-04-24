@@ -9,14 +9,14 @@ void compute_f(
        F_dense[index] = (real_t *) MKL_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
    }
 
-  // (-τ * LN + β * LN* BS_y) * H_x 
-  fcompop(&F_sparse[3], F_dense[3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β, sbp.n);
-  // (-τ * LS + β * LS* BS_x) * H_x 
-  fcompop(&F_sparse[2], F_dense[2], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β, sbp.n);
-  // (-τ * LE + β * LE* BS_y) * H_y 
-  fcompop(&F_sparse[1], F_dense[1], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β, sbp.n);
-  // (-τ * LW + β * LW* BS_y) * H_y 
-  fcompop(&F_sparse[0], F_dense[0], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β, sbp.n);
+  // (-TAU_VALUE * LN + BETA_VALUE * LN* BS_y) * H_x 
+  fcompop(&F_sparse[3], F_dense[3], sbp.ln, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE, sbp.n);
+  // (-TAU_VALUE * LS + BETA_VALUE * LS* BS_x) * H_x 
+  fcompop(&F_sparse[2], F_dense[2], sbp.ls, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE, sbp.n);
+  // (-TAU_VALUE * LE + BETA_VALUE * LE* BS_y) * H_y 
+  fcompop(&F_sparse[1], F_dense[1], sbp.le, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE, sbp.n);
+  // (-TAU_VALUE * LW + BETA_VALUE * LW* BS_y) * H_y 
+  fcompop(&F_sparse[0], F_dense[0], sbp.lw, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE, sbp.n);
 
 }
 
@@ -26,8 +26,8 @@ void fcompop(
   csr<real_t>       &L, 
   csr<real_t>       &B,
   csr<real_t>       &H,
-  real_t       const τ, 
-  real_t       const β,
+  real_t       const TAU_VALUE, 
+  real_t       const BETA_VALUE,
   std::size_t        n) {
 
     sparse_matrix_t tl, bl, b, h, temp1, temp2;
@@ -36,10 +36,10 @@ void fcompop(
     da.type = SPARSE_MATRIX_TYPE_GENERAL;
     db.type = SPARSE_MATRIX_TYPE_GENERAL;
 
-    auto status = L.mkl(&tl, -τ);
+    auto status = L.mkl(&tl, -TAU_VALUE);
     mkl_sparse_status(status);
     
-    status = L.mkl(&bl, β);
+    status = L.mkl(&bl, BETA_VALUE);
     mkl_sparse_status(status);
 
     status = B.mkl(&b);
@@ -133,8 +133,8 @@ void fcompop(
     /*
     petsc_matrix t;
     MatMatMult(l, b, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &t);
-    MatScale(t, β);
-    MatAXPY(t, -τ, l, UNKNOWN_NONZERO_PATTERN);
+    MatScale(t, BETA_VALUE);
+    MatAXPY(t, -TAU_VALUE, l, UNKNOWN_NONZERO_PATTERN);
     MatMatMult(t, h, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &f);
     finalize<fw>(f);
     destroy<fw>(t);

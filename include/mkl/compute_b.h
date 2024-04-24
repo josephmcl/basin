@@ -18,17 +18,17 @@ compute_b(
 void compute_b1(
     sparse_matrix_t    & B, 
     csr<real_t>        & H, 
-    real_t       const   τ, 
+    real_t       const   TAU_VALUE, 
     csr<real_t>        & L, 
-    real_t       const   β, 
+    real_t       const   BETA_VALUE, 
     csr<real_t>        &BS,
     std::size_t  const   n);
 
 void compute_b2(
     sparse_matrix_t    & B, 
     csr<real_t>        & H, 
-    real_t       const   τ, 
+    real_t       const   TAU_VALUE, 
     csr<real_t>        & L, 
-    real_t       const   β, 
+    real_t       const   BETA_VALUE, 
     csr<real_t>        &BS,
     std::size_t  const   n);

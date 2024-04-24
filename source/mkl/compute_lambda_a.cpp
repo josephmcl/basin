@@ -24,9 +24,9 @@ auto compute_lambda_a_mpi(
   std::memset(FTMF, 0, sz);
   sparse_status_t status;
 
-  #pragma omp parallel for private(ftmf) collapse(2) num_threads(sbp.n_threads)
-  for (std::size_t i = 0; i != MF.size(); ++i) {
-    for (std::size_t j = 0; j != F.size(); ++j) {
+  #pragma omp parallel for private(ftmf) collapse(2)
+  for (std::size_t i = 0; i < MF.size(); ++i) {
+    for (std::size_t j = 0; j < F.size(); ++j) {
       ftmf = &FTMF[(i * F.size() + j) * sbp.n * sbp.n];
       status = mkl_sparse_d_mm(
         SPARSE_OPERATION_NON_TRANSPOSE, 1., F[j], da, 
@@ -72,7 +72,7 @@ auto compute_lambda_a_mpi(
 
   // Copy each block into a new array, sometimes wit
   std::size_t a, b, c, d, mindex, findex;
-  //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) // num_threads(sbp.n_threads)
+  //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) //
   for (std::size_t i = 0; i < interface_list.size(); i += 4) {
     a = interface_list[i];
     b = interface_list[i + 1];
@@ -101,10 +101,10 @@ auto compute_lambda_a_mpi(
   }
 
   std::size_t v;
-  // #pragma omp parallel for private(v) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(v)
   for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
     v = j % sbp.n;
-    lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.τ;
+    lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.TAU_VALUE;
     // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += 1;
   }
   
@@ -141,7 +141,7 @@ auto compute_lambda_a(
   // [ ft block -- 4                ]
   // [ m block -- 3         ]
   // [f block -- 4]
-  // #pragma omp parallel for private(ftmf) collapse(2) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(ftmf) collapse(2)
   for (std::size_t i = 0; i != F.size(); ++i) {
     for (std::size_t j = 0; j != MF.size(); ++j) {
       ftmf = &FTMF[(i * MF.size() + j) * sbp.n * sbp.n];
@@ -259,7 +259,7 @@ auto compute_lambda_a(
 
   // Copy each block into a new array, sometimes wit
   std::size_t a, b, c, d, mindex, findex, ftindex, index;
-  //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) // num_threads(sbp.n_threads)
+  //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) //
   for (std::size_t i = 0; i < interface_list.size(); i += 4) {
     a = interface_list[i];
     b = interface_list[i + 1];
@@ -349,10 +349,10 @@ auto compute_lambda_a(
 
 
   std::size_t v;
-  // #pragma omp parallel for private(v) num_threads(sbp.n_threads)
+  // #pragma omp parallel for private(v)
   for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
     v = j % sbp.n;
-    lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.τ;
+    lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.TAU_VALUE;
     // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += 1;
   }
   

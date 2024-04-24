@@ -101,7 +101,7 @@ numerical::operators::sbp::sbp(
     std::size_t const size, std::size_t const order, 
     real_t const left, real_t const right): 
     size(size), order(order), left(left), right(right), 
-    grid_size((right - left) / static_cast<ℝ>(size - 1)) { }
+    grid_size((right - left) / static_cast<REE_TYPE>(size - 1)) { }
 
 std::tuple<std::size_t, std::vector<real_t> const *>
 numerical::operators::sbp::row(std::size_t const index) const {
@@ -192,7 +192,7 @@ numerical::operators::sbp::rowf(std::size_t const index) const {
 /*
 
 void numerical::operators::sbp::
-product(std::vector<ℝ> const &rhs, std::vector<ℝ> &lhs) {
+product(std::vector<REE_TYPE> const &rhs, std::vector<REE_TYPE> &lhs) {
     for (std::size_t i = 0; i != lhs.size(); ++i) {
         auto [column, r] = row(i);
         for (std::size_t j = 0; j != r->size(); ++j) {
@@ -340,11 +340,11 @@ void numerical::operators::d2::load_right_boundary_data() {
     }   
 }
 
-void numerical::operators::d2::fuse(std::vector<ℝ> const &diag) {
+void numerical::operators::d2::fuse(std::vector<REE_TYPE> const &diag) {
     for (std::size_t i = 0; i < size; ++i) h[i] = diag[i];
 }
 
-void numerical::operators::d2::fuse_hi(std::vector<ℝ> const &diag) {
+void numerical::operators::d2::fuse_hi(std::vector<REE_TYPE> const &diag) {
     for (std::size_t i = 0; i < size; ++i) hi[i] = diag[i];
 }
 

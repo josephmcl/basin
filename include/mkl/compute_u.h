@@ -15,7 +15,6 @@
 
 void compute_u(
     real_t *u,
-   std::vector<double *> &M,
-   std::vector<int *> &Mpiv,
+    vv<sparse_matrix_t> &M,
     real_t *rhs, 
     components &sbp);

@@ -35,10 +35,10 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
 
   /* [ M  F ][ u ] = [ g   ]
-     [ FT D ][ λ ]   [ g_λ ]
+     [ FT D ][ LAMBDA ]   [ g_LAMBDA ]
   
     [ B   T ][ u ] = [ bu ]
-    [ TT  D ][ λ ]   [ bλ ]
+    [ TT  D ][ LAMBDA ]   [ bLAMBDA ]
   */
 
   // timing::init();
@@ -64,15 +64,15 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
       |-----|-----|------|
       | ... | ... | bn-1 |  */
 
-  auto gw = [](real_t x, real_t y){return std::sin(π * x + π * y);};
-  auto ge = [](real_t x, real_t y){return std::sin(π * x + π * y);};
-  auto gs = [](real_t x, real_t y){return -π * std::cos(π * x + π * y);};
-  auto gn = [](real_t x, real_t y){return π * std::cos(π * x + π * y);};
+  auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
+  auto ge = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
+  auto gs = [](real_t x, real_t y){return -PI_VALUE * std::cos(PI_VALUE * x + PI_VALUE * y);};
+  auto gn = [](real_t x, real_t y){return PI_VALUE * std::cos(PI_VALUE * x + PI_VALUE * y);};
 
 
   // Multiply by 2 here because u_xx == u_yy
   auto source_function = [](real_t x, real_t y) {
-    return 2. * (-π * π * sin(π * x + π * y));};
+    return 2. * (-PI_VALUE * PI_VALUE * sin(PI_VALUE * x + PI_VALUE * y));};
 
 
 
@@ -104,8 +104,8 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
 
   auto sbp = components{n, span};
 
-  sbp.τ = 42.; // hard code these coeffs for now. 
-  sbp.β = 1.;
+  sbp.TAU_VALUE = 42.; // hard code these coeffs for now. 
+  sbp.BETA_VALUE = 1.;
 
   sbp.n_blocks = n_blocks;         // additional non sbp-sat info. but  
   sbp.n_interfaces = n_interfaces; // useful to have along. 
@@ -180,8 +180,8 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   // needed to set up an sbp-sat problem.
   auto sbp = components{n, span};
 
-  sbp.τ = 42.; // hard code these coeffs for now. 
-  sbp.β = 1.;
+  sbp.TAU_VALUE = 42.; // hard code these coeffs for now. 
+  sbp.BETA_VALUE = 1.;
 
   sbp.n_blocks = n_blocks;         // additional non sbp-sat info. but  
   sbp.n_interfaces = n_interfaces; // useful to have along. 
@@ -337,41 +337,41 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   //for (std::size_t i = 0; i < lambda_indices.size() - 2; i += 2)
   //  std::cout << lambda_indices[i] << " " << lambda_indices[i + 1] << std::endl;
 
-  // Compute λA.
+  // Compute LAMBDAA.
   begin = timing::read();
-  petsc_matrix λA; 
-  initialize_λA(λA, sbp);
-  compute_λA_reduced(λA, D, f, MF, F_symbols, FT_symbols, sbp);
+  petsc_matrix LAMBDAA; 
+  initialize_LAMBDAA(LAMBDAA, sbp);
+  compute_LAMBDAA_reduced(LAMBDAA, D, f, MF, F_symbols, FT_symbols, sbp);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed λA vTv (D - FT * M \\ F)." << std::endl;
+    << " s # " << "Computed LAMBDAA vTv (D - FT * M \\ F)." << std::endl;
 
 
   begin = timing::read();
-  petsc_matrix λA_alt; 
-  initialize_λA(λA_alt, sbp);
-  compute_λA_gemm(λA_alt, D, F, MF_mat, F_symbols, FT_symbols, sbp);
+  petsc_matrix LAMBDAA_alt; 
+  initialize_LAMBDAA(LAMBDAA_alt, sbp);
+  compute_LAMBDAA_gemm(LAMBDAA_alt, D, F, MF_mat, F_symbols, FT_symbols, sbp);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed λA GEMM (D - FT * M \\ F)." << std::endl;
+    << " s # " << "Computed LAMBDAA GEMM (D - FT * M \\ F)." << std::endl;
 
   begin = timing::read();
-  petsc_matrix λA_pgf; 
-  initialize_λA(λA_alt, sbp);
-  compute_λA_gemm_flat(λA_pgf, D, MF_mat, lambda_indices, sbp);
+  petsc_matrix LAMBDAA_pgf; 
+  initialize_LAMBDAA(LAMBDAA_alt, sbp);
+  compute_LAMBDAA_gemm_flat(LAMBDAA_pgf, D, MF_mat, lambda_indices, sbp);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed λA GEMM Parallel (D - FT * M \\ F)." << std::endl;
+    << " s # " << "Computed LAMBDAA GEMM Parallel (D - FT * M \\ F)." << std::endl;
 
   
-  verify::petsc_matrix(λA, λA_alt);
+  verify::petsc_matrix(LAMBDAA, LAMBDAA_alt);
 
   hss_poisson_2d::compute_lambdaA_mkl();
 
-  // MatAXPY(λA_alt, -1., λA, DIFFERENT_NONZERO_PATTERN);
+  // MatAXPY(LAMBDAA_alt, -1., LAMBDAA, DIFFERENT_NONZERO_PATTERN);
 
   // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_DEFAULT);
-  // MatView(λA_alt, PETSC_VIEWER_STDOUT_SELF);
+  // MatView(LAMBDAA_alt, PETSC_VIEWER_STDOUT_SELF);
 
   // std::vector<petsc_matrix> const &F, 
   // std::vector<petsc_matrix> const &MF, 
@@ -386,41 +386,41 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   logging::out << std::setw(14) << std::fixed << end - begin 
     << " s # " << "Solved Mx = g." << std::endl;
 
-  // Compute λb
+  // Compute LAMBDAb
   begin = timing::read();
-  petsc_vector λb;
-  initialize_λb(λb, sbp); 
-  // λb = -FT * M \ g 
-  compute_λb(λb, F, Mg, FT_symbols, sbp);
+  petsc_vector LAMBDAb;
+  initialize_LAMBDAb(LAMBDAb, sbp); 
+  // LAMBDAb = -FT * M \ g 
+  compute_LAMBDAb(LAMBDAb, F, Mg, FT_symbols, sbp);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed λb (gd - FT * M \\ g)." << std::endl;
+    << " s # " << "Computed LAMBDAb (gd - FT * M \\ g)." << std::endl;
 
   begin = timing::read();
-  petsc_vector λ;
-  VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &λ); 
+  petsc_vector LAMBDA;
+  VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &LAMBDA); 
   petsc_solver trace_solver;
   KSPCreate(PETSC_COMM_SELF, &trace_solver); 
-  KSPSetOperators(trace_solver, λA, λA);
+  KSPSetOperators(trace_solver, LAMBDAA, LAMBDAA);
   KSPSetFromOptions(trace_solver);
-  KSPSolve(trace_solver, λb, λ);
+  KSPSolve(trace_solver, LAMBDAb, LAMBDA);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin
-    << " s # " << "Computed λ (λA \\ λb)." << std::endl;
+    << " s # " << "Computed LAMBDA (LAMBDAA \\ LAMBDAb)." << std::endl;
 
   // Compute the solution 
   // solution = M \ (g - F * lambda)
   // num_sol = M \ (g_bar - F*lambda)
 
   begin = timing::read();
-  petsc_vector b, neg, g_explicit; // b vector is the b λ-conditioned vector 
+  petsc_vector b, neg, g_explicit; // b vector is the b LAMBDA-conditioned vector 
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &b);
   make_scaled_vec(neg, sbp.n * sbp.n * sbp.n_blocks, 0.);
   VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n * sbp.n_blocks, &g_explicit);
   {
     const double *values;
     std::vector<int> writei; writei.resize(sbp.n * sbp.n);
-    #pragma omp parallel for collapse(1) private(values) num_threads(sbp.n_threads)
+    #pragma omp parallel for collapse(1) private(values)
     for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
       for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         writei[i] = sbp.n * sbp.n * block + i;
@@ -429,14 +429,14 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
       VecSetValues(g_explicit, sbp.n * sbp.n, &writei[0], values, INSERT_VALUES);
     }
   }
-  double const *λ_;
-  VecGetArrayRead(λ, &λ_);
-  std::vector<double> λ_data; 
+  double const *LAMBDA_;
+  VecGetArrayRead(LAMBDA, &LAMBDA_);
+  std::vector<double> LAMBDA_data; 
   std::vector<double> b_data; 
-  λ_data.assign(λ_, λ_ + sbp.n_interfaces * sbp.n);
+  LAMBDA_data.assign(LAMBDA_, LAMBDA_ + sbp.n_interfaces * sbp.n);
   b_data.resize(sbp.n_blocks * sbp.n * sbp.n);
   std::size_t k, l, m;
-  #pragma omp parallel for collapse(1) private(k, l, m) num_threads(sbp.n_threads)
+  #pragma omp parallel for collapse(1) private(k, l, m)
   for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
     for (std::size_t j = 0; j != sbp.n_blocks * sbp.n * sbp.n; ++j) {
       
@@ -446,7 +446,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
       if (m > 0) {
         k = (l * sbp.n * sbp.n) + (j % (sbp.n * sbp.n));
         // std::cout << k << std::endl;
-        b_data[j] += λ_data[i] * f_data[m - 1][k];
+        b_data[j] += LAMBDA_data[i] * f_data[m - 1][k];
         // std::cout << k << " " << f_data[m][k] << std::endl;
         // std::cout << m - 1 << std::endl;
       }
@@ -454,7 +454,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   }
   std::vector<int> wi; 
   wi.resize(sbp.n * sbp.n * sbp.n_blocks);
-  #pragma omp parallel for num_threads(sbp.n_threads)
+  #pragma omp parallel for
   for (std::size_t i = 0; i != sbp.n_blocks * sbp.n * sbp.n; ++i) {
     wi[i] = i;
   }
@@ -463,7 +463,7 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   finalize<fw>(b);
   end = timing::read();
   logging::out << std::setw(14) << std::fixed << end - begin 
-    << " s # " << "Computed b (g - F * λ)." << std::endl;
+    << " s # " << "Computed b (g - F * LAMBDA)." << std::endl;
   
   begin = timing::read();
   std::vector<petsc_vector> x;
@@ -484,8 +484,8 @@ petsc_hybridized_poisson(std::size_t vl_n, std::size_t el_n) {
   }
   destroy<fw>(D);
   for (auto &e: Mg) destroy<fw>(e);
-  destroy<fw>(λb);
-  destroy<fw>(λ);
+  destroy<fw>(LAMBDAb);
+  destroy<fw>(LAMBDA);
   destroy<fw>(b);
   for (auto &e: x) destroy<fw>(e);
 }
@@ -523,7 +523,7 @@ void sbp_sat::x2::compute_solution(
   }
 
   std::vector<std::vector<double>> bs_; bs_.resize(sbp.n_blocks);
-  #pragma omp parallel for num_threads(sbp.n_threads)
+  #pragma omp parallel for
   for (std::size_t block = 0; block != sbp.n_blocks; ++block) {
     // double const *v = val + (n2 * block);
     // std::cout << v << " " << v + n2 << std::endl;
@@ -536,7 +536,7 @@ void sbp_sat::x2::compute_solution(
   //#pragma omp parallel for 
 
   std::size_t j, thread_index;
-  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+  #pragma omp parallel for private(j, thread_index)
   for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
     j = sbp.n_blocks_dim * i;
     thread_index = omp_get_thread_num();
@@ -547,7 +547,7 @@ void sbp_sat::x2::compute_solution(
     finalize<fw>(x[j]);
   }
 
-  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+  #pragma omp parallel for private(j, thread_index)
   for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
     j = (sbp.n_blocks_dim * i) + sbp.n_blocks_dim - 1;
     thread_index = omp_get_thread_num();
@@ -558,7 +558,7 @@ void sbp_sat::x2::compute_solution(
     finalize<fw>(x[j]);
   }
 
-  #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+  #pragma omp parallel for private(j, thread_index)
   for (std::size_t i = 0; i != sbp.n_blocks_dim * (sbp.n_blocks_dim - 2); ++i) {
     j = i + ((i / (sbp.n_blocks_dim - 2)) * 2) + 1;
     thread_index = omp_get_thread_num();
@@ -615,8 +615,8 @@ write_m(
   auto hx2 = numerical::operators::H(cols.size(), 2, 0, x2_spacing);
 
   // hard code for now 
-  real_t τ = 42.;
-  real_t β = 1.;
+  real_t TAU_VALUE = 42.;
+  real_t BETA_VALUE = 1.;
 
   // hard code the second order bs matrix for now. 
   vector_t bsx1 = {
@@ -664,10 +664,10 @@ write_m(
 
   // Append boundary condition coefficients as new matrices to the 
   // composite matrix, m. 
-  add_boundary<x, left> (m, rows, cols, bsx1, hx2, β, τ, bc[0]);
-  add_boundary<x, right>(m, rows, cols, bsx1, hx2, β, τ, bc[1]);
-  add_boundary<y, left> (m, rows, cols, bsx1, hx2, β, τ, bc[2]);
-  add_boundary<y, right>(m, rows, cols, bsx1, hx2, β, τ, bc[3]);
+  add_boundary<x, left> (m, rows, cols, bsx1, hx2, BETA_VALUE, TAU_VALUE, bc[0]);
+  add_boundary<x, right>(m, rows, cols, bsx1, hx2, BETA_VALUE, TAU_VALUE, bc[1]);
+  add_boundary<y, left> (m, rows, cols, bsx1, hx2, BETA_VALUE, TAU_VALUE, bc[2]);
+  add_boundary<y, right>(m, rows, cols, bsx1, hx2, BETA_VALUE, TAU_VALUE, bc[3]);
   
   MatCompositeSetMatStructure(m, DIFFERENT_NONZERO_PATTERN);
   MatCompositeMerge(m);
@@ -770,13 +770,13 @@ void sbp_sat::x2::fcompop(
   petsc_matrix const &l, 
   petsc_matrix const &b,
   petsc_matrix const &h,
-  real_t       const τ, 
-  real_t       const β) {
+  real_t       const TAU_VALUE, 
+  real_t       const BETA_VALUE) {
 
   petsc_matrix t;
   MatMatMult(l, b, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &t);
-  MatScale(t, β);
-  MatAXPY(t, -τ, l, UNKNOWN_NONZERO_PATTERN);
+  MatScale(t, BETA_VALUE);
+  MatAXPY(t, -TAU_VALUE, l, UNKNOWN_NONZERO_PATTERN);
   MatMatMult(t, h, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &f);
   finalize<fw>(f);
   destroy<fw>(t);
@@ -788,14 +788,14 @@ void sbp_sat::x2::make_F(
   std::vector<std::vector<petsc_vector>> &f,
   std::vector<std::vector<double>> &f_data) {
 
-  // (-τ * LN + β * LN* BS_y) * H_x 
-  fcompop(F[3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
-  // (-τ * LS + β * LS* BS_x) * H_x 
-  fcompop(F[2], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
-  // (-τ * LE + β * LE* BS_y) * H_y 
-  fcompop(F[1], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
-  // (-τ * LW + β * LW* BS_y) * H_y 
-  fcompop(F[0], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+  // (-TAU_VALUE * LN + BETA_VALUE * LN* BS_y) * H_x 
+  fcompop(F[3], sbp.ln, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE);
+  // (-TAU_VALUE * LS + BETA_VALUE * LS* BS_x) * H_x 
+  fcompop(F[2], sbp.ls, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE);
+  // (-TAU_VALUE * LE + BETA_VALUE * LE* BS_y) * H_y 
+  fcompop(F[1], sbp.le, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE);
+  // (-TAU_VALUE * LW + BETA_VALUE * LW* BS_y) * H_y 
+  fcompop(F[0], sbp.lw, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE);
 
   int ncols;
   int const *cols;
@@ -856,16 +856,16 @@ void sbp_sat::x2::make_F_textra(
   components const &sbp, 
   vv<petsc_matrix> &F) {
   
-  //#pragma omp parallel for num_threads(sbp.n_threads)
+  //#pragma omp parallel for
   for (std::size_t i = 0; i != sbp.n_threads; ++i) {
-    // (-τ * LN + β * LN* BS_y) * H_x 
-    fcompop(F[i][3], sbp.ln, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
-    // (-τ * LS + β * LS* BS_x) * H_x 
-    fcompop(F[i][2], sbp.ls, sbp.bsy, sbp.hx, sbp.τ, sbp.β);
-    // (-τ * LE + β * LE* BS_y) * H_y 
-    fcompop(F[i][1], sbp.le, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
-    // (-τ * LW + β * LW* BS_y) * H_y 
-    fcompop(F[i][0], sbp.lw, sbp.bsx, sbp.hy, sbp.τ, sbp.β);
+    // (-TAU_VALUE * LN + BETA_VALUE * LN* BS_y) * H_x 
+    fcompop(F[i][3], sbp.ln, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE);
+    // (-TAU_VALUE * LS + BETA_VALUE * LS* BS_x) * H_x 
+    fcompop(F[i][2], sbp.ls, sbp.bsy, sbp.hx, sbp.TAU_VALUE, sbp.BETA_VALUE);
+    // (-TAU_VALUE * LE + BETA_VALUE * LE* BS_y) * H_y 
+    fcompop(F[i][1], sbp.le, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE);
+    // (-TAU_VALUE * LW + BETA_VALUE * LW* BS_y) * H_y 
+    fcompop(F[i][0], sbp.lw, sbp.bsx, sbp.hy, sbp.TAU_VALUE, sbp.BETA_VALUE);
   }
 }
 
@@ -1046,22 +1046,22 @@ void sbp_sat::x2::make_M_boundary(
     finalize<fw>(LT);
     finalize<fw>(BST);
 
-    // τ*H_y*LW'*LW 
+    // TAU_VALUE*H_y*LW'*LW 
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp1);
     finalize<fw>(temp1);    
-    MatAXPY(temp1, sbp.τ, H, UNKNOWN_NONZERO_PATTERN);    
+    MatAXPY(temp1, sbp.TAU_VALUE, H, UNKNOWN_NONZERO_PATTERN);    
     MatMatMult(LT, L, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
     finalize<fw>(temp2);    
     MatMatMult(temp1, temp2, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp3);
     finalize<fw>(temp3);
     MatAXPY(M, 1., temp3, UNKNOWN_NONZERO_PATTERN);
 
-    // -β*H_y*BS_x'*LW'*LW 
+    // -BETA_VALUE*H_y*BS_x'*LW'*LW 
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);
-    MatAXPY(temp4, sbp.β, H, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp4, sbp.BETA_VALUE, H, UNKNOWN_NONZERO_PATTERN);
     MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
     finalize<fw>(temp5);
     MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);
@@ -1106,11 +1106,11 @@ void sbp_sat::x2::make_M_boundary(
     // PetscViewerPushFormat(PETSC_VIEWER_STDOUT_SELF, PETSC_VIEWER_ASCII_MATLAB);
     // MatView(temp3, PETSC_VIEWER_STDOUT_SELF);
 
-    // -1/τ * H_x * BS_y' * LN' * LN * BS_y 
+    // -1/TAU_VALUE * H_x * BS_y' * LN' * LN * BS_y 
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
     finalize<fw>(temp4);
-    MatAXPY(temp4, 1. / sbp.τ, H, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp4, 1. / sbp.TAU_VALUE, H, UNKNOWN_NONZERO_PATTERN);
     MatMatMult(temp4, BST, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp5);
     finalize<fw>(temp5);
     MatMatMult(temp5, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp6);

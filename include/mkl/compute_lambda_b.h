@@ -12,7 +12,7 @@
 #include "mkl.h"
 
 void compute_lambda_b(
-    real_t *λb, 
+    real_t *LAMBDAb, 
     std::vector<sparse_matrix_t> &Fsparse, 
     real_t *Mg, 
     vv<std::size_t> &FT_symbols, 

@@ -1,7 +1,7 @@
 #pragma once 
 
 #include <cmath>
-#include <numbers>
+//#include <numbers>
 #include <vector>
 #include <tuple>
 #include <iostream>
@@ -16,7 +16,7 @@
 
 using real_t = type::real_t; 
 using vector_t = std::vector<real_t>;
-auto const π = std::numbers::pi_v<real_t>;
+auto const PI_VALUE = 3.14159;
 auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
 
 // Make and store all the components needed to do SBP-SAT things. 
@@ -33,7 +33,7 @@ public:
   std::size_t const accuracy;
   real_t      const spacing;
 
-  real_t τ, β;
+  real_t TAU_VALUE, BETA_VALUE;
 
   std::size_t n_blocks, n_interfaces;
   std::size_t n_blocks_dim; 

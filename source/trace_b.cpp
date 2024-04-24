@@ -77,32 +77,32 @@ void sbp_sat::x2::compute_B(
                  // needed but it's easier to just compute them all for 
                  // now.
 
-    compute_b1(B[0], sbp.hy, sbp.τ, sbp.lw, sbp.β, sbp.bsx, sbp.n);
-    compute_b1(B[1], sbp.hy, sbp.τ, sbp.le, sbp.β, sbp.bsx, sbp.n);
-    compute_b1(B[2], sbp.hx, sbp.τ, sbp.ls, sbp.β, sbp.bsy, sbp.n);
-    compute_b1(B[3], sbp.hx, sbp.τ, sbp.ln, sbp.β, sbp.bsy, sbp.n);
+    compute_b1(B[0], sbp.hy, sbp.TAU_VALUE, sbp.lw, sbp.BETA_VALUE, sbp.bsx, sbp.n);
+    compute_b1(B[1], sbp.hy, sbp.TAU_VALUE, sbp.le, sbp.BETA_VALUE, sbp.bsx, sbp.n);
+    compute_b1(B[2], sbp.hx, sbp.TAU_VALUE, sbp.ls, sbp.BETA_VALUE, sbp.bsy, sbp.n);
+    compute_b1(B[3], sbp.hx, sbp.TAU_VALUE, sbp.ln, sbp.BETA_VALUE, sbp.bsy, sbp.n);
 
-    compute_b2(B[4], sbp.hy, sbp.τ, sbp.lw, sbp.β, sbp.bsx, sbp.n);
-    compute_b2(B[5], sbp.hy, sbp.τ, sbp.le, sbp.β, sbp.bsx, sbp.n);
-    compute_b2(B[6], sbp.hx, sbp.τ, sbp.ls, sbp.β, sbp.bsy, sbp.n);
-    compute_b2(B[7], sbp.hx, sbp.τ, sbp.ln, sbp.β, sbp.bsy, sbp.n);
+    compute_b2(B[4], sbp.hy, sbp.TAU_VALUE, sbp.lw, sbp.BETA_VALUE, sbp.bsx, sbp.n);
+    compute_b2(B[5], sbp.hy, sbp.TAU_VALUE, sbp.le, sbp.BETA_VALUE, sbp.bsx, sbp.n);
+    compute_b2(B[6], sbp.hx, sbp.TAU_VALUE, sbp.ls, sbp.BETA_VALUE, sbp.bsy, sbp.n);
+    compute_b2(B[7], sbp.hx, sbp.TAU_VALUE, sbp.ln, sbp.BETA_VALUE, sbp.bsy, sbp.n);
 }
 
-/* Compute H(a) * (τ * L(d)' - β * BS(a)' * L(d)') for particular 
+/* Compute H(a) * (TAU_VALUE * L(d)' - BETA_VALUE * BS(a)' * L(d)') for particular 
    directional orientations of L and axes orientations of BS. For 2-D 
    EWNS this includes 
 
-    East:  H_y * (τ * LE' - β * BS_x' * LE')
-    West:  H_y * (τ * LW' - β * BS_x' * LW')
-    South: H_x * (τ * LS' - β * BS_y' * LS')
-    North: H_x * (τ * LN' - β * BS_y' * LN')  
+    East:  H_y * (TAU_VALUE * LE' - BETA_VALUE * BS_x' * LE')
+    West:  H_y * (TAU_VALUE * LW' - BETA_VALUE * BS_x' * LW')
+    South: H_x * (TAU_VALUE * LS' - BETA_VALUE * BS_y' * LS')
+    North: H_x * (TAU_VALUE * LN' - BETA_VALUE * BS_y' * LN')  
 */
 void sbp_sat::x2::compute_b1(
     petsc_matrix       & B, 
     petsc_matrix const & H, 
-    real_t       const   τ, 
+    real_t       const   TAU_VALUE, 
     petsc_matrix const & L, 
-    real_t       const   β, 
+    real_t       const   BETA_VALUE, 
     petsc_matrix const &BS,
     std::size_t  const   n) {
 
@@ -112,19 +112,19 @@ void sbp_sat::x2::compute_b1(
     finalize<fw>(LT);
     finalize<fw>(BST);
 
-    // temp1 := β * BS_a^T
+    // temp1 := BETA_VALUE * BS_a^T
     MatCreateSeqAIJ(PETSC_COMM_SELF, n * n, n * n, n, nullptr, &temp1);
     finalize<fw>(temp1);    
-    MatAXPY(temp1, β, BST, UNKNOWN_NONZERO_PATTERN);    
+    MatAXPY(temp1, BETA_VALUE, BST, UNKNOWN_NONZERO_PATTERN);    
 
     // temp2 := temp1 * L_d^T 
     MatMatMult(temp1, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
     finalize<fw>(temp2);   
 
-    // temp3 := τ * L_d^T 
+    // temp3 := TAU_VALUE * L_d^T 
     MatCreateSeqAIJ(PETSC_COMM_SELF, n * n, n, n, nullptr, &temp3);
     finalize<fw>(temp3);    
-    MatAXPY(temp3, τ, LT, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp3, TAU_VALUE, LT, UNKNOWN_NONZERO_PATTERN);
 
     // temp3 := temp3 + (-1) * temp2 
     MatAXPY(temp3, -1., temp2, UNKNOWN_NONZERO_PATTERN);
@@ -141,18 +141,18 @@ void sbp_sat::x2::compute_b1(
 }
 
 
-/* Compute H(a) * (β * L(d)' - 1/τ * BS(a')' * L(d)') for particular 
+/* Compute H(a) * (BETA_VALUE * L(d)' - 1/TAU_VALUE * BS(a')' * L(d)') for particular 
    directional of L and axes orientations of H and BS. For 2-D EWNS this 
    includes 
 
-    South: H_x * (β * LS' - 1/τ * BS_y' * LS')
-    North: H_x * (β * LN' - 1/τ * BS_y' * LN')  */
+    South: H_x * (BETA_VALUE * LS' - 1/TAU_VALUE * BS_y' * LS')
+    North: H_x * (BETA_VALUE * LN' - 1/TAU_VALUE * BS_y' * LN')  */
 void sbp_sat::x2::compute_b2(
     petsc_matrix       & B, 
     petsc_matrix const & H, 
-    real_t       const   τ, 
+    real_t       const   TAU_VALUE, 
     petsc_matrix const & L, 
-    real_t       const   β, 
+    real_t       const   BETA_VALUE, 
     petsc_matrix const &BS,
     std::size_t  const   n) {
 
@@ -162,19 +162,19 @@ void sbp_sat::x2::compute_b2(
     finalize<fw>(LT);
     finalize<fw>(BST);
 
-    // temp1 := 1. / τ * BS(a')^T
+    // temp1 := 1. / TAU_VALUE * BS(a')^T
     MatCreateSeqAIJ(PETSC_COMM_SELF, n * n, n * n, n, nullptr, &temp1);
     finalize<fw>(temp1);    
-    MatAXPY(temp1, 1. / τ, BST, UNKNOWN_NONZERO_PATTERN);    
+    MatAXPY(temp1, 1. / TAU_VALUE, BST, UNKNOWN_NONZERO_PATTERN);    
 
     // temp2 := temp1 * L_d^T 
     MatMatMult(temp1, LT, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
     finalize<fw>(temp2);   
 
-    // temp3 := β * L_d^T 
+    // temp3 := BETA_VALUE * L_d^T 
     MatCreateSeqAIJ(PETSC_COMM_SELF, n * n, n, n, nullptr, &temp3);
     finalize<fw>(temp3);    
-    MatAXPY(temp3, β, LT, UNKNOWN_NONZERO_PATTERN);
+    MatAXPY(temp3, BETA_VALUE, LT, UNKNOWN_NONZERO_PATTERN);
 
     // temp3 := temp3 + (-1) * temp2 
     MatAXPY(temp3, -1., temp2, UNKNOWN_NONZERO_PATTERN);
@@ -268,19 +268,19 @@ void sbp_sat::x2::compute_Mg(
     std::size_t j;
     std::size_t thread_index;
 
-    #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+    #pragma omp parallel for private(j, thread_index)
     for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
       j = sbp.n_blocks_dim * i;
       thread_index = static_cast<std::size_t>(omp_get_thread_num());
       KSPSolve(M[0][thread_index], g[j], Mg[j]);
     }
-    #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+    #pragma omp parallel for private(j, thread_index)
     for (std::size_t i = 0; i != sbp.n_blocks_dim; ++i) {
       j = (sbp.n_blocks_dim * i) + sbp.n_blocks_dim - 1;
       thread_index = static_cast<std::size_t>(omp_get_thread_num());
       KSPSolve(M[2][thread_index], g[j], Mg[j]);
     }
-    #pragma omp parallel for private(j, thread_index) num_threads(sbp.n_threads)
+    #pragma omp parallel for private(j, thread_index)
     for (std::size_t i = 0; i != sbp.n_blocks_dim * (sbp.n_blocks_dim - 2); ++i) {
       j = i + ((i / (sbp.n_blocks_dim - 2)) * 2) + 1;
       thread_index = static_cast<std::size_t>(omp_get_thread_num());
@@ -303,14 +303,14 @@ void sbp_sat::x2::destroy_Mg(
 }
 
 
-void sbp_sat::x2::initialize_λb( 
-  petsc_vector           &λb,
+void sbp_sat::x2::initialize_LAMBDAb( 
+  petsc_vector           &LAMBDAb,
   components       const &sbp) {
-    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &λb);
+    VecCreateSeq(PETSC_COMM_SELF, sbp.n * sbp.n_interfaces, &LAMBDAb);
 }
 
-void sbp_sat::x2::compute_λb( 
-  petsc_vector           &λb, 
+void sbp_sat::x2::compute_LAMBDAb( 
+  petsc_vector           &LAMBDAb, 
   std::vector<petsc_matrix> const &F, 
   std::vector<petsc_vector> const &Mg, 
   vv<std::size_t>  const &FT_symbols,
@@ -353,9 +353,9 @@ void sbp_sat::x2::compute_λb(
   //       way worse than the rest of the solution. unsure why. maybe 
   //       fix later. update: not exactly sure what i meant by this
   
-  VecAXPY(λb, -1., n1); // delta g is not used right now so just negate
+  VecAXPY(LAMBDAb, -1., n1); // delta g is not used right now so just negate
 
-  finalize<fw>(λb);
+  finalize<fw>(LAMBDAb);
 
   destroy<fw>(temp);
   destroy<fw>(n1);

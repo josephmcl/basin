@@ -8,7 +8,7 @@ void poisson1d::analytical(
 
   auto h = (right - left) / static_cast<real_t>(size - 1);
   for (std::size_t i = 0; i < size; ++i) 
-    res.push_back(std::sin(h * π * i));
+    res.push_back(std::sin(h * PI_VALUE * i));
 }
 
 void poisson1d::analytical_blocked(
@@ -41,7 +41,7 @@ void poisson1d::analytical_blocked(
   for (std::size_t i = 0; i < local_domain_ranges.size(); ++i) {
     auto local = local_domain_ranges[i];
     for (auto &e : local) {  
-      res.push_back(std::sin(π * e));
+      res.push_back(std::sin(PI_VALUE * e));
     }
   }
 }
@@ -53,7 +53,7 @@ void poisson1d::petsc_problem(
   domain_t   const  domain, 
   boundary_t const  boundary) {
         
-  long double β = 1.;
+  long double BETA_VALUE = 1.;
   long double σ1 = -40.;
   long double σ2 = 1;
   long double ϵ = 1.;
@@ -109,9 +109,9 @@ void poisson1d::petsc_problem(
   write_d2(A, local_domain_ranges, local_domain_size, spacing_square);
 
   write_boundaries(A, local_domain_ranges, hi, bs, matrix_points, 
-    local_domain_size, β, σ1, σ2);
+    local_domain_size, BETA_VALUE, σ1, σ2);
 
-  write_fluxs(A, local_domain_ranges, hi, bs, local_domain_size, β, 
+  write_fluxs(A, local_domain_ranges, hi, bs, local_domain_size, BETA_VALUE, 
     σ1, ϵ);
   
   MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY);
@@ -125,7 +125,7 @@ void poisson1d::petsc_problem(
     auto local_offset = i * local_domain_size;
     for (auto it = local.begin(); it != local.end(); ++it) {  
       auto index = local_offset + it.index;
-      VecSetValue(b, index, -π * π * std::sin(*it * π), ADD_VALUES);
+      VecSetValue(b, index, -PI_VALUE * PI_VALUE * std::sin(*it * PI_VALUE), ADD_VALUES);
     }
   }
 
@@ -162,8 +162,8 @@ void poisson1d::petsc_hybridized_problem(
   domain_t   const  domain, 
   boundary_t const  boundary) {
 
-  long double β = 1.;
-  long double τ = -40.;
+  long double BETA_VALUE = 1.;
+  long double TAU_VALUE = -40.;
   long double δ_f = 0.0;
 
   // Unpack tuples 
@@ -225,13 +225,13 @@ void poisson1d::petsc_hybridized_problem(
      have unique left and right-hand boundaries accordingly. In this case 
      the final block has a second-order right-hand boundary. */
 
-  write_upper_first_order_boundary(M[0], bs, β, τ);
+  write_upper_first_order_boundary(M[0], bs, BETA_VALUE, TAU_VALUE);
   write_lower_second_order_boundary(M[local_problems - 1], bs, 
-    local_domain_size, β, τ);
+    local_domain_size, BETA_VALUE, TAU_VALUE);
   for (nat_t i = 1; i != local_problems; ++i) {
     write_lower_first_order_boundary(M[i - 1], bs, local_domain_size, 
-      β, τ);
-    write_upper_first_order_boundary(M[i], bs, β, τ);
+      BETA_VALUE, TAU_VALUE);
+    write_upper_first_order_boundary(M[i], bs, BETA_VALUE, TAU_VALUE);
     
   }
   
@@ -251,12 +251,12 @@ void poisson1d::petsc_hybridized_problem(
     auto local = local_domain_ranges[i];
     for (auto it = local.begin(); it != local.end(); ++it) {  
       VecSetValue(gbar[i], it.index, 
-        -π * π * std::sin(*it * π) * h[it.index], ADD_VALUES);
+        -PI_VALUE * PI_VALUE * std::sin(*it * PI_VALUE) * h[it.index], ADD_VALUES);
     }
     
   }
 
-  VecSetValue(gbar[0], 0, τ * left_data, ADD_VALUES);
+  VecSetValue(gbar[0], 0, TAU_VALUE * left_data, ADD_VALUES);
   VecSetValue(gbar[0], 0, bs[0] * left_data, ADD_VALUES);
   VecSetValue(gbar[0], 1, bs[1] * left_data, ADD_VALUES);
   VecSetValue(gbar[0], 2, bs[2] * left_data, ADD_VALUES);
@@ -264,11 +264,11 @@ void poisson1d::petsc_hybridized_problem(
   VecSetValue(gbar[local_problems - 1], local_domain_size - 1, 
     right_data, ADD_VALUES);
   VecSetValue(gbar[local_problems - 1], local_domain_size - 1, 
-    (1 / τ) * bs[0] * right_data, ADD_VALUES);
+    (1 / TAU_VALUE) * bs[0] * right_data, ADD_VALUES);
   VecSetValue(gbar[local_problems - 1], local_domain_size - 2, 
-    (1 / τ) * bs[1] * right_data, ADD_VALUES);
+    (1 / TAU_VALUE) * bs[1] * right_data, ADD_VALUES);
   VecSetValue(gbar[local_problems - 1], local_domain_size - 3, 
-    (1 / τ) * bs[2] * right_data, ADD_VALUES);
+    (1 / TAU_VALUE) * bs[2] * right_data, ADD_VALUES);
 
   for (std::size_t i = 0; i < gbar.size(); ++i) {
     VecAssemblyBegin(gbar[i]);
@@ -282,19 +282,19 @@ void poisson1d::petsc_hybridized_problem(
 
   /*  F Transpose:
          right data          left data              empty
-      [ 0 ... BS, τ * BS ][ τ * BS, BS ... 0 ][ 0, 0 ... 0, 0, 0 ]
+      [ 0 ... BS, TAU_VALUE * BS ][ TAU_VALUE * BS, BS ... 0 ][ 0, 0 ... 0, 0, 0 ]
            left data           right data             empty
-      [ 0, 0 ... 0, 0, 0 ][ 0 ... BS, τ * BS ][ τ * BS, BS ... 0 ] */
+      [ 0, 0 ... 0, 0, 0 ][ 0 ... BS, TAU_VALUE * BS ][ TAU_VALUE * BS, BS ... 0 ] */
 
   petsc_vector Fl = {};
   petsc_vector Fr = {};
   VecCreateSeq(PETSC_COMM_SELF, local_domain_size, &Fl);
   VecCreateSeq(PETSC_COMM_SELF, local_domain_size, &Fr);
     
-  VecSetValue(Fl, 0, τ + bs[0], ADD_VALUES);
+  VecSetValue(Fl, 0, TAU_VALUE + bs[0], ADD_VALUES);
   VecSetValue(Fl, 1,     bs[1], ADD_VALUES);
   VecSetValue(Fl, 2,     bs[2], ADD_VALUES);
-  VecSetValue(Fr, local_domain_size - 1, τ + bs[0], ADD_VALUES);
+  VecSetValue(Fr, local_domain_size - 1, TAU_VALUE + bs[0], ADD_VALUES);
   VecSetValue(Fr, local_domain_size - 2,     bs[1], ADD_VALUES);
   VecSetValue(Fr, local_domain_size - 3,     bs[2], ADD_VALUES);
 
@@ -340,10 +340,10 @@ void poisson1d::petsc_hybridized_problem(
     KSPSolve(M_solvers[i], Fr, temps[i * 2 + 1]);
   }
 
-  petsc_matrix λ_denominator = {};
+  petsc_matrix LAMBDA_denominator = {};
 
   MatCreateSeqAIJ(PETSC_COMM_SELF, interfaces, interfaces, 2, nullptr, 
-    &λ_denominator);
+    &LAMBDA_denominator);
   
   for (auto &e: temp_scalars) e = 0.;
 
@@ -366,53 +366,53 @@ void poisson1d::petsc_hybridized_problem(
         double a, b = 0.;
         VecTDot(Fr, temps[i * 2 + 1], &a);
         VecTDot(Fl, temps[i * 2 + 2], &b);
-        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
-        MatSetValue(λ_denominator, i, j, -b, ADD_VALUES);
+        MatSetValue(LAMBDA_denominator, i, j, -a, ADD_VALUES);
+        MatSetValue(LAMBDA_denominator, i, j, -b, ADD_VALUES);
       } 
       else if (i - 1 == j) {
         double a = 0.;
         VecTDot(Fr, temps[i * 2], &a);
-        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
+        MatSetValue(LAMBDA_denominator, i, j, -a, ADD_VALUES);
       }
       else if (i + 1 == j) {
         double a = 0.;
         VecTDot(Fl, temps[i * 2 + 3], &a);
-        MatSetValue(λ_denominator, i, j, -a, ADD_VALUES);
+        MatSetValue(LAMBDA_denominator, i, j, -a, ADD_VALUES);
       }
     }
-    MatSetValue(λ_denominator, i, i, 2 * τ, ADD_VALUES);   
+    MatSetValue(LAMBDA_denominator, i, i, 2 * TAU_VALUE, ADD_VALUES);   
   }
 
-  MatAssemblyBegin(λ_denominator, MAT_FINAL_ASSEMBLY);
-  MatAssemblyEnd(λ_denominator, MAT_FINAL_ASSEMBLY);
+  MatAssemblyBegin(LAMBDA_denominator, MAT_FINAL_ASSEMBLY);
+  MatAssemblyEnd(LAMBDA_denominator, MAT_FINAL_ASSEMBLY);
 
-  petsc_vector λ_numerator = {};
-  VecCreateSeq(PETSC_COMM_SELF, interfaces, &λ_numerator);
+  petsc_vector LAMBDA_numerator = {};
+  VecCreateSeq(PETSC_COMM_SELF, interfaces, &LAMBDA_numerator);
   for (std::size_t i = 0; i < interfaces; ++i) {
-    VecSetValue(λ_numerator, i, gdel[i], ADD_VALUES);
+    VecSetValue(LAMBDA_numerator, i, gdel[i], ADD_VALUES);
   }
 
-  VecAssemblyBegin(λ_numerator);
-  VecAssemblyEnd(λ_numerator);
+  VecAssemblyBegin(LAMBDA_numerator);
+  VecAssemblyEnd(LAMBDA_numerator);
 
-  // MatView(λ_denominator, PETSC_VIEWER_STDOUT_WORLD);
+  // MatView(LAMBDA_denominator, PETSC_VIEWER_STDOUT_WORLD);
 
-  petsc_vector λ = {};
-  VecCreateSeq(PETSC_COMM_SELF, interfaces, &λ);
-  VecAssemblyBegin(λ);
-  VecAssemblyEnd(λ);
+  petsc_vector LAMBDA = {};
+  VecCreateSeq(PETSC_COMM_SELF, interfaces, &LAMBDA);
+  VecAssemblyBegin(LAMBDA);
+  VecAssemblyEnd(LAMBDA);
 
-  KSP λ_solver = {};
-  KSPCreate(PETSC_COMM_WORLD, &λ_solver);
-  KSPSetOperators(λ_solver, λ_denominator, λ_denominator);
-  KSPSetUp(λ_solver);
+  KSP LAMBDA_solver = {};
+  KSPCreate(PETSC_COMM_WORLD, &LAMBDA_solver);
+  KSPSetOperators(LAMBDA_solver, LAMBDA_denominator, LAMBDA_denominator);
+  KSPSetUp(LAMBDA_solver);
 
-  // VecView(λ_numerator, PETSC_VIEWER_STDOUT_WORLD);
+  // VecView(LAMBDA_numerator, PETSC_VIEWER_STDOUT_WORLD);
   
-  KSPSolve(λ_solver, λ_numerator, λ);
+  KSPSolve(LAMBDA_solver, LAMBDA_numerator, LAMBDA);
 
-  double const *λ_data;
-  VecGetArrayRead(λ, &λ_data);
+  double const *LAMBDA_data;
+  VecGetArrayRead(LAMBDA, &LAMBDA_data);
 
   // rhs = (g_bar - F*lambda)
   for (std::size_t i = 0; i < local_problems; ++i) {
@@ -422,8 +422,8 @@ void poisson1d::petsc_hybridized_problem(
 
   for (std::size_t i = 0; i < local_problems - 1; ++i) {
     /* NOTE: AXPY => y = a x + y */
-    VecAXPY(gbar[i],     -λ_data[i], temps[i * 2 + 1]);
-    VecAXPY(gbar[i + 1], -λ_data[i], temps[i * 2 + 2]);
+    VecAXPY(gbar[i],     -LAMBDA_data[i], temps[i * 2 + 1]);
+    VecAXPY(gbar[i + 1], -LAMBDA_data[i], temps[i * 2 + 2]);
   }
 
   auto u = std::vector<petsc_vector>(local_problems);
@@ -454,10 +454,10 @@ void poisson1d::petsc_hybridized_problem(
   VecDestroy(&Fl);
   VecDestroy(&Fr);
   for (auto &e : temps)     VecDestroy(&e);
-  VecDestroy(&λ_numerator);
-  MatDestroy(&λ_denominator);
-  KSPDestroy(&λ_solver);
-  VecDestroy(&λ);
+  VecDestroy(&LAMBDA_numerator);
+  MatDestroy(&LAMBDA_denominator);
+  KSPDestroy(&LAMBDA_solver);
+  VecDestroy(&LAMBDA);
   for (auto &e : u)         VecDestroy(&e);
 }
 
@@ -541,15 +541,15 @@ void poisson1d::write_boundaries(
     vector_t             const &bs, 
     long double          const  matrix_points,
     long double          const  local_domain_size,
-    long double          const  β,
+    long double          const  BETA_VALUE,
     long double          const  σ1,
     long double          const  σ2) {
 
   /* Set the second-order SAT terms for the left hand first-order
-       boundary: β * HI1 * BS' * e0 * e0' */
-  MatSetValue(A, 0, 0, β * hi[0] * bs[0], ADD_VALUES);
-  MatSetValue(A, 1, 0, β * hi[1] * bs[1], ADD_VALUES);
-  MatSetValue(A, 2, 0, β * hi[2] * bs[2], ADD_VALUES);
+       boundary: BETA_VALUE * HI1 * BS' * e0 * e0' */
+  MatSetValue(A, 0, 0, BETA_VALUE * hi[0] * bs[0], ADD_VALUES);
+  MatSetValue(A, 1, 0, BETA_VALUE * hi[1] * bs[1], ADD_VALUES);
+  MatSetValue(A, 2, 0, BETA_VALUE * hi[2] * bs[2], ADD_VALUES);
 
   /* Set the boundary data for the left hand first-order boundary. */
   MatSetValue(A, 0, 0, σ1 * hi[0], ADD_VALUES);
@@ -569,7 +569,7 @@ void poisson1d::write_fluxs(
     vector_t             const &hi, 
     vector_t             const &bs, 
     long double          const  local_domain_size,
-    long double          const  β,
+    long double          const  BETA_VALUE,
     long double          const  σ1,
     long double          const  ϵ) {
 
@@ -578,13 +578,13 @@ void poisson1d::write_fluxs(
     auto local_offset = (i + 1) * local_domain_size;
     auto n = local_domain_size;
 
-    // β * HI1 * BS' * en * en' 
+    // BETA_VALUE * HI1 * BS' * en * en' 
     MatSetValue(A, local_offset - 3, local_offset - 1, 
-      β * hi[n - 3] * bs[2], ADD_VALUES);
+      BETA_VALUE * hi[n - 3] * bs[2], ADD_VALUES);
     MatSetValue(A, local_offset - 2, local_offset - 1, 
-      β * hi[n - 2] * bs[1], ADD_VALUES);
+      BETA_VALUE * hi[n - 2] * bs[1], ADD_VALUES);
     MatSetValue(A, local_offset - 1, local_offset - 1, 
-      β * hi[n - 1] * bs[0], ADD_VALUES);
+      BETA_VALUE * hi[n - 1] * bs[0], ADD_VALUES);
 
     // ϵ * HI1 * BS  * en * en' 
     MatSetValue(A, local_offset - 1, local_offset - 3, 
@@ -598,13 +598,13 @@ void poisson1d::write_fluxs(
     MatSetValue(A, local_offset - 1, local_offset - 1, 
       σ1 * hi[n - 1], ADD_VALUES);
 
-    // β * HI1 * BS' *e0 * e0' 
+    // BETA_VALUE * HI1 * BS' *e0 * e0' 
     MatSetValue(A, local_offset, local_offset, 
-      β * hi[0] * bs[0], ADD_VALUES);
+      BETA_VALUE * hi[0] * bs[0], ADD_VALUES);
     MatSetValue(A, local_offset + 1, local_offset, 
-      β * hi[1] * bs[1], ADD_VALUES);
+      BETA_VALUE * hi[1] * bs[1], ADD_VALUES);
     MatSetValue(A, local_offset + 2, local_offset, 
-      β * hi[2] * bs[2], ADD_VALUES);
+      BETA_VALUE * hi[2] * bs[2], ADD_VALUES);
 
     // ϵ * HI1 * BS * e0 * e0 
     MatSetValue(A, local_offset, local_offset, 
@@ -630,13 +630,13 @@ void poisson1d::write_fluxs(
     MatSetValue(A, local_offset - 1, local_offset + 2, 
       ϵ * hi[n - 1] * bs[2], ADD_VALUES);
 
-    // -β * HI1 * BS' * en * e0' 
+    // -BETA_VALUE * HI1 * BS' * en * e0' 
     MatSetValue(A, local_offset - 3, local_offset, 
-      -β * hi[n - 3] * bs[2], ADD_VALUES);
+      -BETA_VALUE * hi[n - 3] * bs[2], ADD_VALUES);
     MatSetValue(A, local_offset - 2, local_offset, 
-      -β * hi[n - 2] * bs[1], ADD_VALUES);
+      -BETA_VALUE * hi[n - 2] * bs[1], ADD_VALUES);
     MatSetValue(A, local_offset - 1, local_offset, 
-      -β * hi[n - 1] * bs[0], ADD_VALUES);
+      -BETA_VALUE * hi[n - 1] * bs[0], ADD_VALUES);
 
     // -σ₁ * HI1 * e0 * en' 
     MatSetValue(A, local_offset, local_offset - 1, 
@@ -650,13 +650,13 @@ void poisson1d::write_fluxs(
     MatSetValue(A, local_offset, local_offset - 3, 
       ϵ * hi[0] * bs[2], ADD_VALUES);
 
-    // -β * HI1 * BS' * e0 * en' 
+    // -BETA_VALUE * HI1 * BS' * e0 * en' 
     MatSetValue(A, local_offset + 2, local_offset - 1, 
-      -β * hi[2] * bs[2], ADD_VALUES);
+      -BETA_VALUE * hi[2] * bs[2], ADD_VALUES);
     MatSetValue(A, local_offset + 1, local_offset - 1, 
-      -β * hi[1] * bs[1], ADD_VALUES);
+      -BETA_VALUE * hi[1] * bs[1], ADD_VALUES);
     MatSetValue(A, local_offset, local_offset - 1,
-      -β * hi[0] * bs[0], ADD_VALUES);      
+      -BETA_VALUE * hi[0] * bs[0], ADD_VALUES);      
   }
 }
 
@@ -664,48 +664,48 @@ void poisson1d::write_fluxs(
 void poisson1d::write_upper_first_order_boundary(
   petsc_matrix       &M, 
   vector_t     const &bs, 
-  long double  const  β,
-  long double  const  τ) {
+  long double  const  BETA_VALUE,
+  long double  const  TAU_VALUE) {
       
-  MatSetValue(M, 0, 0, τ, ADD_VALUES);
-  MatSetValue(M, 0, 0, β * bs[0], ADD_VALUES);
-  MatSetValue(M, 1, 0, β * bs[1], ADD_VALUES);
-  MatSetValue(M, 2, 0, β * bs[2], ADD_VALUES);
+  MatSetValue(M, 0, 0, TAU_VALUE, ADD_VALUES);
+  MatSetValue(M, 0, 0, BETA_VALUE * bs[0], ADD_VALUES);
+  MatSetValue(M, 1, 0, BETA_VALUE * bs[1], ADD_VALUES);
+  MatSetValue(M, 2, 0, BETA_VALUE * bs[2], ADD_VALUES);
 }
 
 void poisson1d::write_lower_first_order_boundary(
   petsc_matrix       &M, 
   vector_t     const &bs,
   long double  const  n, 
-  long double  const  β,
-  long double  const  τ) {
+  long double  const  BETA_VALUE,
+  long double  const  TAU_VALUE) {
     
-  MatSetValue(M, n - 1, n - 1, τ, ADD_VALUES);
-  MatSetValue(M, n - 1, n - 1, β * bs[0], ADD_VALUES);
-  MatSetValue(M, n - 2, n - 1, β * bs[1], ADD_VALUES);
-  MatSetValue(M, n - 3, n - 1, β * bs[2], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 1, TAU_VALUE, ADD_VALUES);
+  MatSetValue(M, n - 1, n - 1, BETA_VALUE * bs[0], ADD_VALUES);
+  MatSetValue(M, n - 2, n - 1, BETA_VALUE * bs[1], ADD_VALUES);
+  MatSetValue(M, n - 3, n - 1, BETA_VALUE * bs[2], ADD_VALUES);
 }
 
 void poisson1d::write_lower_second_order_boundary(
   petsc_matrix       &M, 
   vector_t     const &bs,
   long double  const  n, 
-  long double  const  β,
-  long double  const  τ) {
+  long double  const  BETA_VALUE,
+  long double  const  TAU_VALUE) {
     
-  MatSetValue(M, n - 1, n - 1, β * bs[0], ADD_VALUES);
-  MatSetValue(M, n - 1, n - 2, β * bs[1], ADD_VALUES);
-  MatSetValue(M, n - 1, n - 3, β * bs[2], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 1, BETA_VALUE * bs[0], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 2, BETA_VALUE * bs[1], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 3, BETA_VALUE * bs[2], ADD_VALUES);
 
-  MatSetValue(M, n - 1, n - 1, (1 / τ) * bs[0] * bs[0], ADD_VALUES);
-  MatSetValue(M, n - 1, n - 2, (1 / τ) * bs[1] * bs[0], ADD_VALUES);
-  MatSetValue(M, n - 1, n - 3, (1 / τ) * bs[2] * bs[0], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 1, (1 / TAU_VALUE) * bs[0] * bs[0], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 2, (1 / TAU_VALUE) * bs[1] * bs[0], ADD_VALUES);
+  MatSetValue(M, n - 1, n - 3, (1 / TAU_VALUE) * bs[2] * bs[0], ADD_VALUES);
 
-  MatSetValue(M, n - 2, n - 1, (1 / τ) * bs[0] * bs[1], ADD_VALUES);
-  MatSetValue(M, n - 2, n - 2, (1 / τ) * bs[1] * bs[1], ADD_VALUES);
-  MatSetValue(M, n - 2, n - 3, (1 / τ) * bs[2] * bs[1], ADD_VALUES);
+  MatSetValue(M, n - 2, n - 1, (1 / TAU_VALUE) * bs[0] * bs[1], ADD_VALUES);
+  MatSetValue(M, n - 2, n - 2, (1 / TAU_VALUE) * bs[1] * bs[1], ADD_VALUES);
+  MatSetValue(M, n - 2, n - 3, (1 / TAU_VALUE) * bs[2] * bs[1], ADD_VALUES);
 
-  MatSetValue(M, n - 3, n - 1, (1 / τ) * bs[0] * bs[2], ADD_VALUES);
-  MatSetValue(M, n - 3, n - 2, (1 / τ) * bs[1] * bs[2], ADD_VALUES);
-  MatSetValue(M, n - 3, n - 3, (1 / τ) * bs[2] * bs[2], ADD_VALUES);
+  MatSetValue(M, n - 3, n - 1, (1 / TAU_VALUE) * bs[0] * bs[2], ADD_VALUES);
+  MatSetValue(M, n - 3, n - 2, (1 / TAU_VALUE) * bs[1] * bs[2], ADD_VALUES);
+  MatSetValue(M, n - 3, n - 3, (1 / TAU_VALUE) * bs[2] * bs[2], ADD_VALUES);
 }
