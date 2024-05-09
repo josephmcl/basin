@@ -100,7 +100,7 @@ components::make_h1() {
   // MatSetValue(h1y, 0, 0, v, ADD_VALUES);
   h1x(2 / spacing, 0, 0);
   h1y(2 / spacing, 0, 0);
-  h1v.push_back(spacing);
+  h1v.push_back(spacing / 2);
   for (std::size_t i = 1; i != n - 1; ++i) {
     //MatSetValue(h1x, i, i, spacing, ADD_VALUES);
     //MatSetValue(h1y, i, i, spacing, ADD_VALUES);
@@ -112,7 +112,7 @@ components::make_h1() {
   //MatSetValue(h1y, n - 1, n - 1, v, ADD_VALUES);
   h1x(2 / spacing, n - 1, n - 1);
   h1y(2 / spacing, n - 1, n - 1);
-  h1v.push_back(spacing);
+  h1v.push_back(spacing / 2);
   //finalize<fw>(h1x);
   //finalize<fw>(h1y);
 
@@ -156,6 +156,10 @@ components::make_hl() {
   hl = csr<double>{n2, n2};
 
   real_t const v = (1. / 2.) * spacing;
+
+  std::cout << "H TILDE VALUES:" << v * v << " " << v * spacing << " " 
+    << spacing * spacing << std::endl;
+    
   // MatSetValue(hl, 0, 0, v * v, ADD_VALUES);
   hl(v * v, 0, 0);
   for (std::size_t j = 1; j != n - 1; ++j) {

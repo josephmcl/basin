@@ -39,8 +39,8 @@ void compute_g(
         relblock = sbp.rank_index_u[block];
         // block is the local index local -> 0, 1, 2, ... 
         // but relblock is element index --> k, k+1, k+2, ... 
-        gi = &(*g)[0] + (n2 * block);
-        gti = &(gtemp)[0] + (n2 * block);
+        gi = &(*g)[0] + (n2 * relblock);
+        gti = &(gtemp)[0] + (n2 * relblock);
 
         // 4 is known quantity as our blocks are rect. and orth.
         constexpr std::size_t faces = 4;
@@ -88,7 +88,7 @@ void compute_g(
             }
         }
 
-        source = &sources[0] + (n2 * block);
+        source = &sources[0] + (sbp.n * relblock);
 
         /*
         for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
@@ -99,10 +99,14 @@ void compute_g(
             std::cout << source[i] << " ";
         }
         std::cout  << std::endl;
+        std::cout  << std::endl;
         */
 
-        for (std::size_t i = 0; i != n2; ++i) {
-            gti[i] = source[i];
+        //
+        std::size_t source_offset = relblock * sbp.n * sbp.n;
+
+        for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
+            gti[i] = source[source_offset + i];
         }
 
         status = mkl_sparse_d_mv(

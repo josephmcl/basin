@@ -13,13 +13,16 @@ void compute_u(
     double *up, *rp;
     std::size_t k;
 
-    #pragma omp parallel for private(up, rp, k) 
+    #pragma omp parallel for private(up, rp, k)
     for (std::size_t i = 0; i < sbp.rank_limit_u; ++i) {
+       
         auto td = omp_get_thread_num();
         auto ii = sbp.rank_index_u[i];
         up = &u[i * sbp.n * sbp.n];
         rp = &rhs[i * sbp.n * sbp.n];
         k = mi[ii % sbp.n_blocks_dim];
+        
+        // mkl_set_num_threads_local(4);
         status = mkl_sparse_d_qr_solve(
             SPARSE_OPERATION_NON_TRANSPOSE, M[td][k], nullptr,
             SPARSE_LAYOUT_COLUMN_MAJOR, 1, up , sbp.n * sbp.n, 

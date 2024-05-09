@@ -168,6 +168,7 @@ void poisson_2d::single(components &sbp) {
     }
     */
 
+    /*
     int err;
     matrix_descr dc;
     dc.type = SPARSE_MATRIX_TYPE_GENERAL;
@@ -182,7 +183,7 @@ void poisson_2d::single(components &sbp) {
     mkl_sparse_status(status);
     end = timing::read();
     std::cout << "factorize A QR, " << end - begin << std::endl;
-    
+    */
 
     
     /*
@@ -266,7 +267,7 @@ void poisson_2d::single(components &sbp) {
     }
     std::cout << std::endl;
     
-    
+    /*
     begin = timing::read();
     status = mkl_sparse_d_qr_solve(
         SPARSE_OPERATION_NON_TRANSPOSE, A, nullptr,
@@ -284,6 +285,7 @@ void poisson_2d::single(components &sbp) {
     for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         u[i] = g[i];
     }
+    */
     /*
     begin = timing::read();
     err = LAPACKE_dgetrs(LAPACK_COL_MAJOR, 'N', sbp.n*sbp.n, 1, Adense1, sbp.n*sbp.n, piv, u, sbp.n*sbp.n);

@@ -1,4 +1,6 @@
 #include "poisson_2d.h"
+#include <ctime>
+#include <math.h>
 
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     
@@ -6,6 +8,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     timing::init();
 
+    std::cout << "OMP max threads: " <<  omp_get_max_threads() << std::endl;
 
     // omp_set_nested(1);
 
@@ -22,10 +25,12 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto sbp = components{n, span};
 
-    sbp.TAU_VALUE = (2/ span) + (2 / (span * (span/(n - 1)))) * 10; 
+    sbp.TAU_VALUE = (2/ span) + (2 / (span * (span/(n - 1)))); // * 10; 
     // std::cout << "TAU_VALUE " << sbp.TAU_VALUE << std::endl;
-    sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
+    // sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
     sbp.BETA_VALUE = 1.;
+
+    std::cout << "TAU = " << sbp.TAU_VALUE << std::endl;
 
     auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
     auto ge = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
@@ -107,10 +112,13 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     // Generate ranges for the x and y of each block, given the number of 
     // blocks in each dimension.
-    auto block_grid = range_t(0, 1., l_blocks + 1);
+    auto block_grid = range_t(0, 1., sbp.n_blocks_dim + 1);
     std::vector<range_t> grids; 
     for (std::size_t i = 0; i != block_grid.size() - 1; ++i)  {
-        grids.push_back(range_t(*block_grid[i], *block_grid[i + 1], n));
+        real_t from = *block_grid[i];
+        real_t to = *block_grid[i + 1];
+        std::cout << from << " - " << to << std::endl;
+        grids.push_back(range_t(from, to, n));
     }
 
     // Generate the solution at the boundary. This implementation generates 
@@ -122,6 +130,34 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     real_t *sources;
     compute_sources(&sources, grids, source_function);
 
+    
+    for (std::size_t i = 0; i < sbp.n_blocks_dim; ++i) {
+      for (std::size_t j = 0; j < sbp.n; ++j) {
+        for (std::size_t k = 0; k < sbp.n_blocks_dim; ++k) {
+          for (std::size_t l = 0; l < sbp.n; ++l) {
+            auto index = 
+                (i * sbp.n * sbp.n * sbp.n_blocks_dim) 
+              + (k * sbp.n * sbp.n) 
+              + (j * sbp.n) 
+              + l;
+            std::cout << sources[index] << " ";
+          }
+        }
+        std::cout << std::endl;
+      }
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+    for (std::size_t i = 0; i < sbp.n * sbp.n_blocks_dim * 4; ++i) {
+      std::cout << boundary_solution[i] << " ";
+    }
+
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+    
     vv<std::size_t> boundary_data_map;
     vv<std::size_t> boundary_order_map;
     make_boundary_maps(boundary_data_map, boundary_order_map, l_blocks);
@@ -136,6 +172,14 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     std::vector<std::size_t>(n_interfaces, 0)); // columns
     vv<std::size_t> FT_symbols(n_interfaces,      // rows
     std::vector<std::size_t>(n_blocks, 0));     // columns
+
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n_blocks; ++i) {
+      std::cout << g[i] << " ";
+    }
+
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
 
     compute_f_symbols(F_symbols, FT_symbols, interfaces, sbp);
 
@@ -325,11 +369,16 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     if (sbp.rank == 0) {
       
       begin = timing::read();
+
+        //#pragma omp parallel
+        //{
+        // mkl_set_num_threads_local(28);
         status = mkl_sparse_d_qr_solve(
             SPARSE_OPERATION_NON_TRANSPOSE, lam_a_spa, nullptr,
             SPARSE_LAYOUT_COLUMN_MAJOR, 1, lamu , sbp.n * sbp.n_interfaces, 
             LAMBDAb, sbp.n * sbp.n_interfaces);
         mkl_sparse_status(status);
+        //}
       end = timing::read();
       
       //logging::out << std::setw(14) << std::fixed << end - begin 
@@ -380,6 +429,12 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // logging::out << std::setw(14) << std::fixed << end - begin 
     //   << " s # " << "Computed b (g - F * LAMBDA)." << std::endl;
 
+    //for (std::size_t i = 0; i < sbp.n_blocks * sbp.n * sbp.n; ++i) {
+      //if (isnan(rhs[i])) {
+    //    std::cout << rhs[i] << " " << std::endl;
+      //}
+    //}
+
     // Free g, F (sparse), and LAMBDA.
     mkl_free(g);
     for (auto &e: Fsparse) 
@@ -402,7 +457,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin
     //  << " s # " << "Computed u (M \\ b)." << std::endl;
-
+    
     // Free right-hand side memory. 
     mkl_free(rhs);
     
@@ -437,6 +492,53 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       MPI_DOUBLE,     // recieved type
       0,              // receiving rank 
       MPI_COMM_WORLD);
+
+    // this is stored block by block but we need to print it global style 
+    for (std::size_t i = 0; i < sbp.n_blocks_dim; ++i) {
+      for (std::size_t j = 0; j < sbp.n; ++j) {
+        for (std::size_t k = 0; k < sbp.n_blocks_dim; ++k) {
+          for (std::size_t l = 0; l < sbp.n; ++l) {
+            auto index = 
+                (i * sbp.n * sbp.n * sbp.n_blocks_dim) 
+              + (k * sbp.n * sbp.n) 
+              + (j * sbp.n) 
+              + l;
+            std::cout << uu[index] << " ";
+          }
+        }
+        std::cout << std::endl;
+      }
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+
+    for (std::size_t i = 0; i < sbp.n; ++i) {
+      for (std::size_t j = 0; j < sbp.n; ++j) {
+        auto index = i * sbp.n + j;
+        std::cout << uu[index] << " ";
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+    
+    for (std::size_t i = 0; i < sbp.n; ++i) {
+      for (std::size_t j = 0; j < sbp.n; ++j) {
+        auto index = (sbp.n * sbp.n) + (i * sbp.n + j);
+        std::cout << uu[index] << " ";
+      }
+      std::cout << std::endl;
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+    std::cout << std::endl;
+
+    //for (std::size_t i = 0; i< sbp.n * sbp.n * sbp.n_blocks; ++i) {
+    //  std::cout << uu[i] << " ";
+    //}
+    //std::cout << std::endl;
 
     end = timing::read();
     trace.push_back(end - begin);
@@ -496,10 +598,13 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
         }
         std::cout << std::endl;
 
+        std::time_t ttt = std::time(0);  // t is an integer type
+
         std::ofstream file;
         std::stringstream filename;
         filename << "results/r_" << sbp.n_ranks << "_t_" << sbp.n_threads 
-          << "_e_" << sbp.n_blocks << "_n2_" << sbp.n * sbp.n << ".csv";
+          << "_e_" << sbp.n_blocks << "_n2_" << sbp.n * sbp.n << "_"
+          << ttt << ".csv";
         file.open(filename.str());
         file << "                ";
         for (std::size_t i = 0; i != sbp.n_ranks; ++i) { 

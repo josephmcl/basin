@@ -14,10 +14,10 @@ void compute_sources(
     for (auto &x : grids) { for (auto &y : grids) {
         //MatCreateSeqDense(PETSC_COMM_SELF, x.size(), y.size(), NULL, 
         //    &F[i]);
-        
         for (auto xi = x.begin(); xi != x.end(); ++xi) { 
             for (auto yi = y.begin(); yi != y.end(); ++yi) {
-                v = ((x.size() + y.size()) * i) + (y.size() * xi.index) + yi.index;
+                v = ((x.size() * y.size()) * i) + (y.size() * xi.index) + yi.index;
+                std::cout << *xi << " " << *yi << " " <<  f(*xi, *yi) << std::endl;
                 (*F)[v] = 2. * f(*xi, *yi); 
                 //MatSetValue(F[i], xi.index, yi.index, f(*xi, *yi), 
                 //    INSERT_VALUES);

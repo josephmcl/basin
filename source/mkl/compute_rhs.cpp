@@ -40,7 +40,7 @@ void compute_rhs(
 
     std::size_t i, j, k;
     double *l, *r;
-    #pragma omp parallel for private(i, j, k, l, r) 
+    // #pragma omp parallel for private(i, j, k, l, r) 
     for (std::size_t a = 0; a < temp.size(); ++a) {
         i = std::get<0>(temp[a]);
         j = std::get<1>(temp[a]);
@@ -58,4 +58,5 @@ void compute_rhs(
     for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
         rhs[i] += g[i];
     }
+
 } 
