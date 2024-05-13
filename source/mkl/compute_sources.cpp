@@ -17,8 +17,7 @@ void compute_sources(
         for (auto xi = x.begin(); xi != x.end(); ++xi) { 
             for (auto yi = y.begin(); yi != y.end(); ++yi) {
                 v = ((x.size() * y.size()) * i) + (y.size() * xi.index) + yi.index;
-                std::cout << *xi << " " << *yi << " " <<  f(*xi, *yi) << std::endl;
-                (*F)[v] = 2. * f(*xi, *yi); 
+                (*F)[v] = f(*xi, *yi); 
                 //MatSetValue(F[i], xi.index, yi.index, f(*xi, *yi), 
                 //    INSERT_VALUES);
             }

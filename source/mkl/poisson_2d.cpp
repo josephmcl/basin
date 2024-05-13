@@ -25,24 +25,37 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto sbp = components{n, span};
 
-    sbp.TAU_VALUE = (2/ span) + (2 / (span * (span/(n - 1)))); // * 10; 
+    auto space = 0.5* (span/(n - 1));
+    sbp.TAU_VALUE = (2/ span) + (2 / (span * (space/span))); // * 10; 
     // std::cout << "TAU_VALUE " << sbp.TAU_VALUE << std::endl;
     // sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
     sbp.BETA_VALUE = 1.;
-
+  
     std::cout << "TAU = " << sbp.TAU_VALUE << std::endl;
 
+    /*
     auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
     auto ge = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
     auto gs = [](real_t x, real_t y){return -PI_VALUE * std::cos(PI_VALUE * x + PI_VALUE * y);};
     auto gn = [](real_t x, real_t y){return PI_VALUE * std::cos(PI_VALUE * x + PI_VALUE * y);};
+    */
 
     // Multiply by 2 here because u_xx == u_yy
+    /*
     auto source_function = [](real_t x, real_t y) {
         return -2. * PI_VALUE * PI_VALUE * sin(PI_VALUE * x + PI_VALUE * y);};
+    */
+    auto source_function = [](real_t x, real_t y) { 
+      return (-2 * PI_VALUE * PI_VALUE * std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y)) +
+             (2 * PI_VALUE * PI_VALUE * std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y)); };
 
     vv<std::size_t> interfaces;
-    std::size_t n_interfaces = make_connectivity(interfaces, l_blocks);
+    std::size_t n_interfaces = make_connectivity(interfaces, l_blocks); 
+
+    auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y);};
+    auto ge = [](real_t x, real_t y){return std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y);};
+    auto gs = [](real_t x, real_t y){return -PI_VALUE * std::sin(PI_VALUE * x) * std::cosh(PI_VALUE * y);};
+    auto gn = [](real_t x, real_t y){return PI_VALUE * std::sin(PI_VALUE * x) * std::cosh(PI_VALUE * y);};
 
 
     /*
@@ -174,7 +187,8 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     std::vector<std::size_t>(n_blocks, 0));     // columns
 
     for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n_blocks; ++i) {
-      std::cout << g[i] << " ";
+      
+      std::cout << std::setprecision(14) << g[i] << " ";
     }
 
     std::cout << std::endl;
@@ -221,6 +235,28 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       status = mkl_sparse_copy(M[0][2], dc, &M[i][2]);
       mkl_sparse_status(status);
     }
+
+    // /* Helper for printing sparse matrix
+    sparse_matrix_t tmat;
+    csr<real_t> eye(sbp.n*sbp.n, sbp.n*sbp.n);
+    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
+      eye(1., i, i);
+    }
+    eye.mkl(&tmat);
+    
+    double *mtemp = (double *) mkl_malloc(sizeof(double) * sbp.n*sbp.n * sbp.n*sbp.n, 64);
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n * sbp.n; ++i) {
+      mtemp[i] = 0.;
+    }
+    mkl_sparse_d_spmmd(SPARSE_OPERATION_NON_TRANSPOSE, M[0][2], tmat, SPARSE_LAYOUT_ROW_MAJOR, mtemp, sbp.n*sbp.n);
+    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
+      for (std::size_t j = 0; j < sbp.n * sbp.n; ++j) {
+        std::cout << mtemp[i * sbp.n * sbp.n + j] << " ";
+      }
+      std::cout << std::endl;
+    }
+    // */
+    
     for (std::size_t i = 0; i != M.size(); ++i) {
       for (std::size_t j = 0; j != M[i].size(); ++j) {
       
@@ -230,6 +266,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
         mkl_sparse_status(status);
       }
     }
+    
 
     // Compute F components.
     auto Fsparse = std::vector<sparse_matrix_t>(4);
@@ -495,9 +532,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     // this is stored block by block but we need to print it global style 
     for (std::size_t i = 0; i < sbp.n_blocks_dim; ++i) {
-      for (std::size_t j = 0; j < sbp.n; ++j) {
+      std::size_t lim_a = (i == sbp.n_blocks_dim - 1) ? sbp.n : sbp.n - 1;
+      for (std::size_t j = 0; j < lim_a; ++j) {
         for (std::size_t k = 0; k < sbp.n_blocks_dim; ++k) {
-          for (std::size_t l = 0; l < sbp.n; ++l) {
+          std::size_t lim_b = (k == sbp.n_blocks_dim - 1) ? sbp.n : sbp.n - 1;
+          for (std::size_t l = 0; l < lim_b; ++l) {
             auto index = 
                 (i * sbp.n * sbp.n * sbp.n_blocks_dim) 
               + (k * sbp.n * sbp.n) 

@@ -95,27 +95,26 @@ components::make_h1() {
   h1x = csr<double>{n, n};
   h1y = csr<double>{n, n};
 
-  real_t const v = 2 * spacing;
+  real_t const v = (1. / 2.) * spacing;
   // MatSetValue(h1x, 0, 0, v, ADD_VALUES);
   // MatSetValue(h1y, 0, 0, v, ADD_VALUES);
-  h1x(2 / spacing, 0, 0);
-  h1y(2 / spacing, 0, 0);
-  h1v.push_back(spacing / 2);
+  h1x(v, 0, 0);
+  h1y(v, 0, 0);
+  h1v.push_back(v);
   for (std::size_t i = 1; i != n - 1; ++i) {
     //MatSetValue(h1x, i, i, spacing, ADD_VALUES);
     //MatSetValue(h1y, i, i, spacing, ADD_VALUES);
-    h1x(1 / spacing, i, i);
-    h1y(1 / spacing, i, i);
+    h1x(spacing, i, i);
+    h1y(spacing, i, i);
     h1v.push_back(spacing);
   }
   //MatSetValue(h1x, n - 1, n - 1, v, ADD_VALUES);
   //MatSetValue(h1y, n - 1, n - 1, v, ADD_VALUES);
-  h1x(2 / spacing, n - 1, n - 1);
-  h1y(2 / spacing, n - 1, n - 1);
-  h1v.push_back(spacing / 2);
+  h1x(v, n - 1, n - 1);
+  h1y(v, n - 1, n - 1);
+  h1v.push_back(v);
   //finalize<fw>(h1x);
   //finalize<fw>(h1y);
-
 }
 
 void 
@@ -156,10 +155,6 @@ components::make_hl() {
   hl = csr<double>{n2, n2};
 
   real_t const v = (1. / 2.) * spacing;
-
-  std::cout << "H TILDE VALUES:" << v * v << " " << v * spacing << " " 
-    << spacing * spacing << std::endl;
-    
   // MatSetValue(hl, 0, 0, v * v, ADD_VALUES);
   hl(v * v, 0, 0);
   for (std::size_t j = 1; j != n - 1; ++j) {
@@ -200,58 +195,67 @@ components::make_d2() {
   d2x = csr<double>{n2, n2};
   d2y = csr<double>{n2, n2};
 
-  real_t spacing2 = (spacing * spacing); // / ((n - 1) * (n - 1));
+  real_t spacing2 = (spacing * spacing) / ((n - 1) * (n - 1));
   real_t coeff = 2.;
+
+  real_t h = span / (n - 1);
+  real_t h2 = h * h;
+
+  spacing2 = h2;
 
   std::size_t jn, in;
   for (std::size_t j = 0; j != n; ++j) {  
     jn = j * n;
 
-    //MatSetValue(d2x, j + 0, j + 0,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES);
-    //MatSetValue(d2x, j + 0, j + 1 * n, -2. / spacing2 * h1v[0] * coeff, ADD_VALUES);
-    //MatSetValue(d2x, j + 0, j + 2 * n,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES); 
-    //MatSetValue(d2x, j + n2 - n, j + n2 - 3 * n,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
-    //MatSetValue(d2x, j + n2 - n, j + n2 - 2 * n, -2. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
-    //MatSetValue(d2x, j + n2 - n, j + n2 - 1 * n,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES); 
-    d2x(1. / spacing2, j + 0, j + 0);
-    d2x(-2. / spacing2, j + 0, j + 1 * n);
-    d2x(1. / spacing2, j + 0, j + 2 * n);
-    d2x(1. / spacing2, j + n2 - n, j + n2 - 3 * n);
-    d2x(-2. / spacing2, j + n2 - n, j + n2 - 2 * n);
-    d2x(1. / spacing2, j + n2 - n, j + n2 - 1 * n);
+    /*
+    d2x((1. / spacing2 * h1v[0] * coeff), j + 0, j + 0);
+    d2x((-2. / spacing2 * h1v[0] * coeff), j + 0, j + 1 * n);
+    d2x((1. / spacing2 * h1v[0] * coeff), j + 0, j + 2 * n);
+    d2x((1. / spacing2 * h1v[n - 1] * coeff), j + n2 - n, j + n2 - 3 * n);
+    d2x((-2. / spacing2 * h1v[n - 1] * coeff), j + n2 - n, j + n2 - 2 * n);
+    d2x((1. / spacing2 * h1v[n - 1] * coeff), j + n2 - n, j + n2 - 1 * n);
 
-    //MatSetValue(d2y, jn + 0, jn + 0,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES);
-    //MatSetValue(d2y, jn + 0, jn + 1, -2. / spacing2 * h1v[0] * coeff, ADD_VALUES);
-    //MatSetValue(d2y, jn + 0, jn + 2,  1. / spacing2 * h1v[0] * coeff, ADD_VALUES); 
-    //MatSetValue(d2y, jn + n - 1, jn + n - 3,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
-    //MatSetValue(d2y, jn + n - 1, jn + n - 2, -2. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES);
-    //MatSetValue(d2y, jn + n - 1, jn + n - 1,  1. / spacing2 * h1v[n - 1] * coeff, ADD_VALUES); 
-    d2y(1. / spacing2, jn + 0, jn + 0);
-    d2y(-2. / spacing2, jn + 0, jn + 1);
-    d2y(1. / spacing2, jn + 0, jn + 2);
-    d2y(1. / spacing2, jn + n - 1, jn + n - 3);
-    d2y(-2. / spacing2, jn + n - 1, jn + n - 2);
-    d2y(1. / spacing2, jn + n - 1, jn + n - 1);
+    d2y((1. / spacing2 * h1v[0] * coeff), jn + 0, jn + 0);
+    d2y((-2. / spacing2 * h1v[0] * coeff), jn + 0, jn + 1);
+    d2y((1. / spacing2 * h1v[0] * coeff), jn + 0, jn + 2);
+    d2y((1. / spacing2 * h1v[n - 1] * coeff), jn + n - 1, jn + n - 3);
+    d2y((-2. / spacing2 * h1v[n - 1] * coeff), jn + n - 1, jn + n - 2);
+    d2y((1. / spacing2 * h1v[n - 1] * coeff), jn + n - 1, jn + n - 1);
+    */
+    d2x((1. / spacing2), j + 0, j + 0);
+    d2x((-2. / spacing2), j + 0, j + 1 * n);
+    d2x((1. / spacing2), j + 0, j + 2 * n);
+    d2x((1. / spacing2), j + n2 - n, j + n2 - 3 * n);
+    d2x((-2. / spacing2), j + n2 - n, j + n2 - 2 * n);
+    d2x((1. / spacing2), j + n2 - n, j + n2 - 1 * n);
+
+    d2y((1. / spacing2), jn + 0, jn + 0);
+    d2y((-2. / spacing2), jn + 0, jn + 1);
+    d2y((1. / spacing2), jn + 0, jn + 2);
+    d2y((1. / spacing2), jn + n - 1, jn + n - 3);
+    d2y((-2. / spacing2), jn + n - 1, jn + n - 2);
+    d2y((1. / spacing2), jn + n - 1, jn + n - 1);
 
     for (std::size_t i = 1; i != n - 1; ++i) {  
         in = i * n;
 
-        //MatSetValue(d2x, in + j, in + j - n,  1. / spacing2 * h1v[i], ADD_VALUES);
-        //MatSetValue(d2x, in + j, in + j,     -2. / spacing2 * h1v[i], ADD_VALUES);
-        //MatSetValue(d2x, in + j, in + j + n,  1. / spacing2 * h1v[i], ADD_VALUES);  
-        d2x(1. / spacing2,  in + j, in + j - n);
-        d2x(-2. / spacing2, in + j, in + j);
-        d2x(1. / spacing2,  in + j, in + j + n);
-
-        //MatSetValue(d2y, jn + i, jn + i - 1,  1. / spacing2 * h1v[i], ADD_VALUES);
-        //MatSetValue(d2y, jn + i, jn + i,     -2. / spacing2 * h1v[i], ADD_VALUES);
-        //MatSetValue(d2y, jn + i, jn + i + 1,  1. / spacing2 * h1v[i], ADD_VALUES);  
-        d2y(1. / spacing2,  jn + i, jn + i - 1);
-        d2y(-2. / spacing2, jn + i, jn + i);
-        d2y(1. / spacing2,  jn + i, jn + i + 1);
+        /*
+        d2x((1. / spacing2 * h1v[i]),  in + j, in + j - n);
+        d2x((-2. / spacing2 * h1v[i]), in + j, in + j);
+        d2x((1. / spacing2 * h1v[i]),  in + j, in + j + n); 
+        
+        d2y((1. / spacing2 * h1v[i]),  jn + i, jn + i - 1);
+        d2y((-2. / spacing2 * h1v[i]), jn + i, jn + i);
+        d2y((1. / spacing2 * h1v[i]),  jn + i, jn + i + 1);
+        */
+        
+        d2x((1. / spacing2),  in + j, in + j - n);
+        d2x((-2. / spacing2), in + j, in + j);
+        d2x((1. / spacing2),  in + j, in + j + n); 
+        
+        d2y((1. / spacing2),  jn + i, jn + i - 1);
+        d2y((-2. / spacing2), jn + i, jn + i);
+        d2y((1. / spacing2),  jn + i, jn + i + 1);
     }
-  }
-
-  //finalize<fw>(d2x);
-  //finalize<fw>(d2y);
+  } 
 }

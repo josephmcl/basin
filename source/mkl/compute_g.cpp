@@ -31,17 +31,37 @@ void compute_g(
     sparse_matrix_t h;
     sbp.hl.mkl(&h);
 
+    sparse_matrix_t tmat;
+    csr<real_t> eye(sbp.n*sbp.n, sbp.n*sbp.n);
+    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
+      eye(1., i, i);
+    }
+    eye.mkl(&tmat);
+    
+    double *mtemp = (double *) mkl_malloc(sizeof(double) * sbp.n*sbp.n * sbp.n*sbp.n, 64);
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n * sbp.n; ++i) {
+      mtemp[i] = 0.;
+    }
+    mkl_sparse_d_spmmd(SPARSE_OPERATION_NON_TRANSPOSE, h, tmat, SPARSE_LAYOUT_ROW_MAJOR, mtemp, sbp.n*sbp.n);
+    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
+      for (std::size_t j = 0; j < sbp.n * sbp.n; ++j) {
+        std::cout << mtemp[i * sbp.n * sbp.n + j] << " ";
+      }
+      std::cout << std::endl;
+    }
+
     std::size_t relblock; 
     for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
         
         //std::cout << "block " << block << std::endl;
-
         relblock = sbp.rank_index_u[block];
+        std::cout << "block " << relblock << std::endl;
         // block is the local index local -> 0, 1, 2, ... 
         // but relblock is element index --> k, k+1, k+2, ... 
         gi = &(*g)[0] + (n2 * relblock);
         gti = &(gtemp)[0] + (n2 * relblock);
 
+        
         // 4 is known quantity as our blocks are rect. and orth.
         constexpr std::size_t faces = 4;
         for (std::size_t face = 0; face != faces; ++face) {
@@ -63,9 +83,6 @@ void compute_g(
                 // [...............boundary solution..............]
                 auto di = boundary_data_map[relblock][face] - 1;
                 solution = &solutions[0] + (face * face_size) + (di * sbp.n);
-
-                // std::cout << "solu - " << (face * face_size) + (di * sbp.n) << std::endl;
-
                 // gi += boundary:matrix * solution:vector
                 status = mkl_sparse_d_mv(
                     SPARSE_OPERATION_NON_TRANSPOSE, 1., 
@@ -73,44 +90,20 @@ void compute_g(
                     solution, 
                     1., gi);
                 mkl_sparse_status(status);
-
-                /*
-                for (std::size_t i = 0; i != sbp.n; ++i) {
-                    std::cout << gti[i] << " ";
-                }
-                std::cout << std::endl << "gti" << std::endl;
-
-                for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-                    std::cout << gti[i] << " ";
-                }
-                std::cout << std::endl << "gti" << std::endl;
-                */
             }
         }
+        
 
-        source = &sources[0] + (sbp.n * relblock);
+        source = &sources[0] + (sbp.n * sbp.n * relblock);
 
-        /*
-        for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-            std::cout << gti[i] << " ";
-        }
-        std::cout  << std::endl;
-        for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-            std::cout << source[i] << " ";
-        }
-        std::cout  << std::endl;
-        std::cout  << std::endl;
-        */
-
-        //
-        std::size_t source_offset = relblock * sbp.n * sbp.n;
+        // std::size_t source_offset = relblock * sbp.n * sbp.n;
 
         for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-            gti[i] = source[source_offset + i];
+            gti[i] = -source[i];
         }
 
         status = mkl_sparse_d_mv(
-            SPARSE_OPERATION_NON_TRANSPOSE, -1., 
+            SPARSE_OPERATION_NON_TRANSPOSE, 1., 
             h, da,
             gti, 
             1., gi);

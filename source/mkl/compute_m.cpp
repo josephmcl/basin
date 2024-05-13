@@ -208,6 +208,7 @@ void make_m_boundary(
     mkl_sparse_status(status);
 
     // -BETA_VALUE*H_y*BS_x'*LW'*LW 
+    
     /*
     MatCreateSeqAIJ(PETSC_COMM_SELF, sbp.n * sbp.n, sbp.n * sbp.n, sbp.n, 
       nullptr, &temp4);
@@ -247,10 +248,10 @@ void make_m_boundary(
 
     sparse_matrix_t h, th, l, bs, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
 
-    auto status = H.mkl(&h);
+    auto status = H.mkl(&h, sbp.BETA_VALUE);
     mkl_sparse_status(status);
 
-    status = H.mkl(&th, -1. / sbp.TAU_VALUE);
+    status = H.mkl(&th, 1. / sbp.TAU_VALUE);
     mkl_sparse_status(status);
 
     status = L.mkl(&l);
@@ -327,8 +328,8 @@ void make_m_boundary(
     mkl_sparse_status(status);
 
     status = mkl_sparse_d_add(
-        SPARSE_OPERATION_NON_TRANSPOSE, temp3, 1., 
-        temp7, M);
+        SPARSE_OPERATION_NON_TRANSPOSE, temp7, -1., 
+        temp3, M);
     mkl_sparse_status(status);
     
 
