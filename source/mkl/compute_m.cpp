@@ -1,4 +1,5 @@
 #include "compute_m.h"
+#include <iomanip>
 
 std::size_t constexpr dirichlet = 1;
 std::size_t constexpr neumann   = 2;
@@ -84,13 +85,18 @@ void make_m(
     mkl_sparse_d_spmmd(
         SPARSE_OPERATION_NON_TRANSPOSE, *M, aye, 
         SPARSE_LAYOUT_ROW_MAJOR, Adense, sbp.n * sbp.n);
+    
+    
     for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n * sbp.n; ++j) {
-            std::cout << Adense[i * sbp.n * sbp.n + j] << " ";
+            std::cout << std::setprecision(14) << Adense[i * sbp.n * sbp.n + j] << " ";
         }
         std::cout << std::endl;
     }
+    std::cout << std::endl;
+    std::cout << std::endl;
     */
+    
   status = mkl_sparse_destroy(Mb1);
   mkl_sparse_status(status);
   status = mkl_sparse_destroy(Mb2);

@@ -31,6 +31,7 @@ void compute_g(
     sparse_matrix_t h;
     sbp.hl.mkl(&h);
 
+    /*
     sparse_matrix_t tmat;
     csr<real_t> eye(sbp.n*sbp.n, sbp.n*sbp.n);
     for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
@@ -43,19 +44,13 @@ void compute_g(
       mtemp[i] = 0.;
     }
     mkl_sparse_d_spmmd(SPARSE_OPERATION_NON_TRANSPOSE, h, tmat, SPARSE_LAYOUT_ROW_MAJOR, mtemp, sbp.n*sbp.n);
-    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
-      for (std::size_t j = 0; j < sbp.n * sbp.n; ++j) {
-        std::cout << mtemp[i * sbp.n * sbp.n + j] << " ";
-      }
-      std::cout << std::endl;
-    }
-
+    */
+   
     std::size_t relblock; 
     for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
         
         //std::cout << "block " << block << std::endl;
         relblock = sbp.rank_index_u[block];
-        std::cout << "block " << relblock << std::endl;
         // block is the local index local -> 0, 1, 2, ... 
         // but relblock is element index --> k, k+1, k+2, ... 
         gi = &(*g)[0] + (n2 * relblock);

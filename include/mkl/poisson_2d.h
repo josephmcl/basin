@@ -21,6 +21,8 @@
 #include "compute_u.h"
 #include "logging.h"
 #include "poisson_2d_single.h"
+#include "cholesky.h"
+#include "factor.h"
 
 #include "omp.h"
 #include "mkl.h"

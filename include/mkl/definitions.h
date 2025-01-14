@@ -13,3 +13,10 @@ using real_p = type_p<type::real_t>;
 
 template <typename T>
 using vv = std::vector<std::vector<T>>;
+
+enum class solver {
+    sparse_qr, 
+    dense_cholesky,
+    rfp_cholesky,
+    pardiso
+};

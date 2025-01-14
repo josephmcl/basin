@@ -1,0 +1,32 @@
+
+    /* Compute M^-1 * g using dense Cholesky. 
+    real_t *Mg_dense_cholesky;
+    sz = sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u;
+    Mg_dense_cholesky = (double *) mkl_malloc(sz, 64);
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+      Mg_dense_cholesky[i] = g[i];
+    }
+
+    begin = timing::read();
+    mg<solver::dense_cholesky>::solve(sbp, Mg_dense_cholesky, M_dense_cholesky);
+    end = timing::read();
+    std::cout << "Compute Mg (dense cholesky) " << std::setw(8) << std::scientific << end - begin << std::endl;
+    
+    /* Compute M^-1 * g using RFP Cholesky. 
+    real_t *Mg_rfp_cholesky;
+    sz = sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u;
+    Mg_rfp_cholesky = (double *) mkl_malloc(sz, 64);
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+      Mg_rfp_cholesky[i] = g[i];
+    }
+
+    begin = timing::read();
+    mg<solver::rfp_cholesky>::solve(sbp, Mg_dense_cholesky, M_dense_cholesky);
+    end = timing::read();
+    std::cout << "Compute Mg (rfp cholesky) " << std::setw(8) << std::scientific << end - begin << std::endl;
+    */
+
+    // logging::out << std::setw(14) << std::fixed << end - begin 
+    // << " s # " << 
+
+    

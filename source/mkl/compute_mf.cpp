@@ -3,7 +3,7 @@
 // Given a vector of matrices M, and a 2-D vector of vectors F, solve 
 // Mi x = Fi for all Mi in M and Fi in F. Store the result in X, aligned
 // M-index major and F-index minor. 
-void compute_mf(
+void compute_mf_sqr(
   std::vector<real_t *>        &x,
   vv<sparse_matrix_t> &m,
   std::vector<real_t *>        &f,
@@ -20,9 +20,50 @@ void compute_mf(
         l = i * f.size() + j;
         status = mkl_sparse_d_qr_solve(
           SPARSE_OPERATION_NON_TRANSPOSE, m[td][i], nullptr,
-          SPARSE_LAYOUT_COLUMN_MAJOR, 1, &x[l][sbp.n * sbp.n * k] , sbp.n, 
-          &f[j][sbp.n * sbp.n * k], sbp.n);
+          SPARSE_LAYOUT_COLUMN_MAJOR, 1, &x[l][sbp.n * sbp.n * k], 
+          sbp.n, &f[j][sbp.n * sbp.n * k], sbp.n);
         mkl_sparse_status(status);
+      }
+    }
+  }
+}
+
+void compute_mf_dc(
+  std::vector<real_t *> &x,
+  std::vector<real_t *> &m,
+  components            &sbp) {
+  std::size_t l;
+  #pragma omp parallel for private(l) collapse(2) 
+  for (std::size_t i = 0; i < m.size(); ++i) {
+    for (std::size_t j = 0; j < 4; ++j) {
+      for (std::size_t k = 0; k < sbp.n; ++k) {
+        l = i * 4 + j;
+        auto error = cholesky::solve(
+          m[i], &x[l][sbp.n * sbp.n * k], sbp);
+        if (error) {
+            std::cout << "Choleksy solve failed code " 
+                << *error << std::endl;
+        }
+      }
+    }
+  }
+}
+
+void compute_mf_rfpc(
+  std::vector<real_t *> &x,
+  std::vector<real_t *> &m,
+  components            &sbp) {
+  std::size_t l;
+  #pragma omp parallel for collapse(2) 
+  for (std::size_t i = 0; i < m.size(); ++i) {
+    for (std::size_t j = 0; j < 4; ++j) {
+      for (std::size_t k = 0; k < sbp.n; ++k) {
+        auto error = cholesky::solve_rfp(
+          m[i], &x[j][sbp.n * sbp.n * k], sbp);
+        if (error) {
+            std::cout << "Choleksy solve failed code " 
+                << *error << std::endl;
+        }
       }
     }
   }

@@ -136,12 +136,11 @@ auto compute_lambda_a(
   }
   sparse_status_t status;
 
-
   // data layout: 
   // [ ft block -- 4                ]
   // [ m block -- 3         ]
   // [f block -- 4]
-  // #pragma omp parallel for private(ftmf) collapse(2)
+  #pragma omp parallel for private(ftmf) collapse(2)
   for (std::size_t i = 0; i != F.size(); ++i) {
     for (std::size_t j = 0; j != MF.size(); ++j) {
       ftmf = &FTMF[(i * MF.size() + j) * sbp.n * sbp.n];
@@ -259,7 +258,7 @@ auto compute_lambda_a(
 
   // Copy each block into a new array, sometimes wit
   std::size_t a, b, c, d, mindex, findex, ftindex, index;
-  //#pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) //
+  #pragma omp parallel for private(a, b, c, d, mindex, findex, ftmf, lat) //
   for (std::size_t i = 0; i < interface_list.size(); i += 4) {
     a = interface_list[i];
     b = interface_list[i + 1];
@@ -349,14 +348,13 @@ auto compute_lambda_a(
 
 
   std::size_t v;
-  // #pragma omp parallel for private(v)
+  #pragma omp parallel for private(v)
   for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
     v = j % sbp.n;
     lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.TAU_VALUE;
     // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += 1;
   }
   
-
   mkl_free(FTMF);
   return;
 }
