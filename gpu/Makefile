@@ -4,7 +4,10 @@ application = poisson2d
 platform    = ${PLATFORM}
 hardware    = ${HARDWARE}
 
+rocm_install_directory = ${ROCM_INSTALL_DIRECTORY}
+
 target = $(application).$(platform).$(hardware) 
+symlink = ./latest
 
 rocm_compiler   := hipcc
 native_compiler := gcc
@@ -22,6 +25,9 @@ object_directory = object
 binary_directory = target
 object_directory_absent = $(object_directory)-
 
+sources := $(wildcard $(source_directory)/*.cpp)
+headers := $(wildcard $(header_directory)/*.h)
+objects := $(sources:$(source_directory)/%.cpp=$(object_directory)/%.o)
 
 nil := 
 space := $(nil) $(nil)
@@ -29,12 +35,19 @@ space := $(nil) $(nil)
 # Commands
 rm = rm -f
 mkdir = mkdir -p
+ln = ln -sf
+
 
 gccf_lags := -std=c++2a -Wall -Wpedantic  -O3 -finput-charset=UTF-8
 compiler_flags := $(gccf_lags) -g
 
-includes  := -I./$(header_directory) 
-libraries := 
+includes_local = -I./$(header_directory)
+includes_rocblas = -I$(rocm_install_directory)/include/rocblas
+includes_rocsolver = -I$(rocm_install_directory)/include/rocsolver
+includes_rocalution = -I$(rocm_install_directory)/include/rocalution
+
+includes  := $(includes_local) $(includes_rocalution)
+libraries := -L$(rocm_install_directory) -lrocalution -lrocsolver
 
 define speaker
 	@echo [make:$$PPID] $(1)
@@ -59,11 +72,12 @@ $(object_directory_absent):
 
 .PHONY: basin 
 basin: $(binary_directory)/$(target)
+	$(call speaker, $(ln) $(binary_directory)/$(target) $(symlink))
 
 .PHONY: clean
 clean:
 	@$(rm) -rf $(objects) $(objects)
 
-.PHONY: remove
-remove: clean
+.PHONY: reset
+reset: clean
 	@$(rm) $(binary_directory)/$(target)
