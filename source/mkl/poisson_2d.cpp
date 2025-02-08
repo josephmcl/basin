@@ -1,11 +1,17 @@
 #include "poisson_2d.h"
 #include <ctime>
 #include <math.h>
+#include <iomanip>
+#include <filesystem>
+#include <string>
+#include <iostream>
+#include <fstream>
+
 //#include "ittnotify.h"
 
 #include "mkl_spblas.h"
 
-void print_csr(sparse_matrix_t *m, std::size_t sz) {
+void print_csr(sparse_matrix_t *m, std::size_t sz, components &sbp, std::string key) {
 
   sparse_matrix_t mm;
   auto s = mkl_sparse_convert_csr(*m, SPARSE_OPERATION_NON_TRANSPOSE, &mm);
@@ -13,25 +19,66 @@ void print_csr(sparse_matrix_t *m, std::size_t sz) {
 
   int ssz = static_cast<int>(sz);
 
+  std::string dir = "./operator/";
+  dir += "V_";
+  dir += std::to_string(sbp.n * sbp.n * sbp.n_blocks_dim * sbp.n_blocks_dim); 
+  dir += "_N_";
+  dir += std::to_string(sbp.n); 
+  dir += "_L_";
+  dir += std::to_string(sbp.n_blocks_dim); 
+
+  namespace fs = std::filesystem;
+  
+  fs::create_directories(dir);
+
   int *rs, *re, *ci; 
   double *v;
   sparse_index_base_t id = SPARSE_INDEX_BASE_ZERO;
   s = mkl_sparse_d_export_csr(mm, &id, &ssz, &ssz, &rs, &re, &ci, &v);
   mkl_sparse_status(s);
 
-  std::size_t vs = 0;
-  for (std::size_t i = 0; i < sz + 1; ++i) {
-    std::cout << rs[i] << " ";
-  }
-  std::cout << std::endl << std::endl; 
-  for (std::size_t i = 0; i < rs[sz]; ++i) {
-    std::cout << ci[i] << " ";
-  }
-  std::cout << std::endl << std::endl; 
-  for (std::size_t i = 0; i < rs[sz]; ++i) {
-    std::cout << v[i] << " ";
-  }
-  std::cout << std::endl << std::endl; 
+  
+  
+  //out.write( reinterpret_cast<const char*>( &f ), sizeof( float ));
+  
+  std::ofstream out;
+  out.open( dir + "/" + key + ".row", std::ios::out | std::ios::binary);
+  out.write( reinterpret_cast<const char*>(&rs[0]), sizeof(int) * (sz + 1));
+  out.close();
+  //std::ifstream ifs( dir + "/" + key + ".row", std::ios::binary);
+  //int read[100];
+  //ifs.read( reinterpret_cast<char*>(&read), sizeof(int) * (sz + 1));
+  //for (std::size_t i = 0; i < sz + 1; ++i) {
+  //  std::cout << read[i] << ' ';
+  //}
+  out.open(dir + "/" + key + ".col", std::ios::out | std::ios::binary);
+  out.write(reinterpret_cast<const char*>(&ci[0]), sizeof(int) * (rs[sz]));
+  out.close();
+  out.open(dir + "/" + key + ".val", std::ios::out | std::ios::binary);
+  out.write(reinterpret_cast<const char*>(&v[0]), sizeof(double) * (rs[sz]));
+  out.close();
+
+  out.open(dir + "/" + key + ".rsize", std::ios::out | std::ios::binary);
+  out.write(reinterpret_cast<const char*>(&sz), sizeof(int));
+  out.close();
+
+  out.open(dir + "/" + key + ".csize", std::ios::out | std::ios::binary);
+  out.write(reinterpret_cast<const char*>(&rs[sz]), sizeof(int));
+  out.close();
+
+
+  //for (std::size_t i = 0; i < rs[sz]; ++i) {
+  //  std::cout << std::setprecision(18) << v[i] << " ";
+  //}
+  //std::cout << std::endl << std::endl; 
+
+  //std::ifstream ifs(dir + "/" + key + ".val", std::ios::binary);
+  //double read[10000];
+  //ifs.read( reinterpret_cast<char*>(&read), sizeof(double) * rs[sz]);
+  //for (std::size_t i = 0; i < rs[sz]; ++i) {
+  //  std::cout << read[i] << ' ';
+  //}
+  //std::cout << std::endl << std::endl; 
 }
 
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
@@ -215,9 +262,9 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     auto end = timing::read();
     trace.push_back(end - begin);
 
-    print_csr(&M[0][0], n_points_x * n_points_x);
-    print_csr(&M[0][1], n_points_x * n_points_x);
-    print_csr(&M[0][2], n_points_x * n_points_x);
+    print_csr(&M[0][0], n_points_x * n_points_x, sbp, "M0");
+    print_csr(&M[0][1], n_points_x * n_points_x, sbp, "M1");
+    print_csr(&M[0][2], n_points_x * n_points_x, sbp, "M2");
 
     // logging::out << std::setw(14) << std::fixed << end - begin
     //  << " s # " << "Computed M." << std::endl;
@@ -386,6 +433,9 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
               &av[0]);
         mkl_sparse_status(status);
       }
+
+      print_csr(&Lambda_A_sparse, lsize, sbp, "T");
+
             
       /* Factorize global lambda matrix.                            * 
        *                                                            */
@@ -579,6 +629,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << 
         err << std::endl;
     }
+
 
     double *lamu = nullptr;
     lamu = (double *) mkl_malloc(sizeof(double) * sbp.n_interfaces * sbp.n, 64);
