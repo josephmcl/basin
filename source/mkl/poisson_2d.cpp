@@ -37,8 +37,6 @@ void print_csr(sparse_matrix_t *m, std::size_t sz, components &sbp, std::string 
   s = mkl_sparse_d_export_csr(mm, &id, &ssz, &ssz, &rs, &re, &ci, &v);
   mkl_sparse_status(s);
 
-  
-  
   //out.write( reinterpret_cast<const char*>( &f ), sizeof( float ));
   
   std::ofstream out;
