@@ -3,9 +3,38 @@
 #include <math.h>
 //#include "ittnotify.h"
 
+#include "mkl_spblas.h"
+
+void print_csr(sparse_matrix_t *m, std::size_t sz) {
+
+  sparse_matrix_t mm;
+  auto s = mkl_sparse_convert_csr(*m, SPARSE_OPERATION_NON_TRANSPOSE, &mm);
+  mkl_sparse_status(s);
+
+  int ssz = static_cast<int>(sz);
+
+  int *rs, *re, *ci; 
+  double *v;
+  sparse_index_base_t id = SPARSE_INDEX_BASE_ZERO;
+  s = mkl_sparse_d_export_csr(mm, &id, &ssz, &ssz, &rs, &re, &ci, &v);
+  mkl_sparse_status(s);
+
+  std::size_t vs = 0;
+  for (std::size_t i = 0; i < sz + 1; ++i) {
+    std::cout << rs[i] << " ";
+  }
+  std::cout << std::endl << std::endl; 
+  for (std::size_t i = 0; i < rs[sz]; ++i) {
+    std::cout << ci[i] << " ";
+  }
+  std::cout << std::endl << std::endl; 
+  for (std::size_t i = 0; i < rs[sz]; ++i) {
+    std::cout << v[i] << " ";
+  }
+  std::cout << std::endl << std::endl; 
+}
+
 void poisson_2d::problem(std::size_t vln, std::size_t eln) {
-    
-    
 
     timing::init();
 
@@ -52,32 +81,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     vv<std::size_t> interfaces;
     std::size_t n_interfaces = make_connectivity(interfaces, l_blocks); 
-
-    /*
-    auto source_function = [](real_t x, real_t y) { 
-      return (-2 * PI_VALUE * PI_VALUE * std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y)) +
-             (2 * PI_VALUE * PI_VALUE * std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y)); };
-
-    
-
-    auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y);};
-    auto ge = [](real_t x, real_t y){return std::sin(PI_VALUE * x) * std::sinh(PI_VALUE * y);};
-    auto gs = [](real_t x, real_t y){return -PI_VALUE * std::sin(PI_VALUE * x) * std::cosh(PI_VALUE * y);};
-    auto gn = [](real_t x, real_t y){return PI_VALUE * std::sin(PI_VALUE * x) * std::cosh(PI_VALUE * y);};
-    */
-
-    /*
-    std::cout << "   Connectivity (nnz = " << n_interfaces 
-              << ")" << std::endl;
-    for (auto r : interfaces) {
-        for (auto e : r) {
-        std::cout << std::setw(4);
-        if (e == 0) std::cout << "   ·";
-        else std::cout << e;
-        }
-        std::cout << std::endl;
-    }
-    */
 
     sbp.n_blocks = n_blocks; // additional non sbp-sat info. but  
     sbp.n_interfaces = n_interfaces; // useful to have along. 
@@ -211,6 +214,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     make_m(&M[0][2], sbp, {1, 1, 1, 2});
     auto end = timing::read();
     trace.push_back(end - begin);
+
+    print_csr(&M[0][0], n_points_x * n_points_x);
+    print_csr(&M[0][1], n_points_x * n_points_x);
+    print_csr(&M[0][2], n_points_x * n_points_x);
+
     // logging::out << std::setw(14) << std::fixed << end - begin
     //  << " s # " << "Computed M." << std::endl;
     sparse_status_t status;
