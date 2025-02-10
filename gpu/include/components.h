@@ -14,11 +14,6 @@
 #include "csr.h"
 
 
-using real_t = type::real_t; 
-using vector_t = std::vector<real_t>;
-auto const PI_VALUE = 3.14159;
-auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
-
 // Make and store all the components needed to do SBP-SAT things. 
 class components {
 
@@ -26,14 +21,15 @@ public:
   components(
     std::size_t const points,
     real_t const span,
-    std::size_t const accuracy = 2);
+    std::size_t const accuracy = 2) {
+    };
 
-  std::size_t const n;
-  real_t      const span;
-  std::size_t const accuracy;
-  real_t      const spacing;
+  std::size_t const n = 0;
+  real_t      const span = 0;
+  std::size_t const accuracy = 0;
+  real_t      const spacing = 0;
 
-  real_t TAU_VALUE, BETA_VALUE;
+  real_t 𝜏, β;
 
   std::size_t n_blocks, n_interfaces;
   std::size_t n_blocks_dim; 
@@ -55,6 +51,7 @@ public:
 
   std::vector<real_t> h1v;
 
+/*
 private: 
   void make_bs();
   void make_l();
@@ -62,4 +59,5 @@ private:
   void make_h1();
   void make_hl();
   void make_d2();
+*/
 };

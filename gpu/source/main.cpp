@@ -27,25 +27,38 @@ int main(int argc, char **argv) {
 
 using real_t = type::real_t;
 
-
 int main() {
 
-  std::size_t vl_n = 4;
-  std::size_t el_n = 3;
+  std::size_t vln = 4;
+  std::size_t eln = 3;
 
-  const std::size_t l_blocks = el_n;
+  const std::size_t l_blocks = eln;
   const std::size_t n_blocks = l_blocks * l_blocks;
+  const real_t span = 1. / static_cast<double>(l_blocks);
+  const std::size_t n_points_x = vln;
+  const std::size_t n = vln;
+
+  const std::size_t block_size_dim = vln;
+  const std::size_t block_count_dim = eln;
+
+  std::cout << "span " << span << std::endl;
+
+  /*
+  auto sbp = components{n, span};
+  auto space = 0.5* (span/(n - 1));
+  sbp.𝜏 = (2/ span) + (2 / (span * (space/span))); // * 10; 
+    // std::cout << "TAU_VALUE " << sbp.TAU_VALUE << std::endl;
+    // sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
+  sbp.β = 1.;
+  */
 
   auto g = data<real_t> {};
 
   vv<std::size_t> interfaces;
-    std::size_t n_interfaces = make_connectivity(interfaces, l_blocks); 
+  std::size_t n_interfaces = make_connectivity(interfaces, l_blocks); 
 
-  auto span = 1. / static_cast<double>(l_blocks);
-  auto n_points_x = vl_n;
-  auto n = vl_n;
 
-  /*
+
   // Generate ranges for the x and y of each block, given the number of 
   // blocks in each dimension.
   auto block_grid = range_t(0, 1., l_blocks + 1);
@@ -53,6 +66,22 @@ int main() {
   for (std::size_t i = 0; i != block_grid.size() - 1; ++i)  {
     grids.push_back(range_t(*block_grid[i], *block_grid[i + 1], n));
   }
+
+  csr_v B;
+  // compute_b(B, sbp);  
+
+  csr_t M0, M1, M2, λ;
+
+  load_operator(M0, "M0", block_size_dim, block_count_dim);
+  load_operator(M1, "M1", block_size_dim, block_count_dim);
+  load_operator(M2, "M2", block_size_dim, block_count_dim);
+  load_operator(λ,  "T",  block_size_dim, block_count_dim);
+
+
+  /*
+  
+  
+  
 
   rocblas_int M;
   rocblas_int N;

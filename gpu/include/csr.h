@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <cstring>
 #include <iostream>
+#include <fstream>
+
 
 //#include "mkl.h"
 //#include "mkl_spblas.h"
@@ -17,7 +19,7 @@ template<typename T>
 struct csr {
     std::size_t n, m;
     std::vector<T> v;
-    std::vector<std::size_t> r, c;
+    std::vector<int> r, c;
 
     std::vector<T *> _a;
     std::vector<std::size_t *> _b;
@@ -37,13 +39,25 @@ struct csr {
     std::size_t row_index_size() const {
         return r.size();
     }
+    std::size_t nnz(int sz) { 
+        v.resize(static_cast<std::size_t>(sz));
+        return v.size();
+    }
+    std::size_t col_index_size(int sz) { 
+        c.resize(static_cast<std::size_t>(sz));
+        return c.size();
+    }
+    std::size_t row_index_size(int sz) { 
+        r.resize(static_cast<std::size_t>(sz));
+        return r.size();
+    }
     T *val_data() {
         return &v[0];
     }
-    std::size_t *col_index_data() {
+    int *col_index_data() {
         return &c[0];
     }
-    std::size_t *row_index_data() {
+    int *row_index_data() {
         return &r[0];
     }
 
@@ -151,5 +165,53 @@ struct csr {
     }
     */
 };
+
+template<typename T>
+void load_operator(csr<T> &mat, std::string key, 
+  std::size_t block_size, std::size_t block_count) {
+  
+  const std::size_t total = 
+    block_size * block_size * block_count * block_count;
+  std::string head = "../operator/V_" + std::to_string(total) + 
+    "_N_" + std::to_string(block_size) + "_L_" + 
+    std::to_string(block_count) + "/";
+
+  int rsize, csize;
+  std::ifstream ifs(head + key + ".rsize", std::ios::binary);
+  ifs.read(reinterpret_cast<char*>(&rsize), sizeof(int));
+  ifs.close();
+  ifs = std::ifstream (head + key + ".csize", std::ios::binary);
+  ifs.read(reinterpret_cast<char*>(&csize), sizeof(int));
+  ifs.close();
+  
+  mat.n = rsize;
+  mat.m = rsize;
+  mat.row_index_size(rsize + 1);
+  mat.col_index_size(csize);
+  mat.nnz(csize);
+  
+  ifs = std::ifstream (head + key + ".row", std::ios::binary);
+  ifs.read(
+    reinterpret_cast<char*>(mat.row_index_data()), 
+    sizeof(int) * (rsize + 1));
+  ifs.close();
+
+  ifs = std::ifstream (head + key + ".col", std::ios::binary);
+  ifs.read(
+    reinterpret_cast<char*>(mat.col_index_data()), 
+    sizeof(int) * csize);
+  ifs.close();
+  
+  ifs = std::ifstream (head + key + ".val", std::ios::binary);
+  ifs.read(
+    reinterpret_cast<char*>(mat.val_data()), 
+    sizeof(T) * csize);
+  ifs.close();
+
+  double gb = ((sizeof(int) * (rsize + 1)) + (sizeof(int) * csize) 
+    + (sizeof(T) * csize)) / 1e9;
+  std::cout << "Loaded csr data \"" << head + key << "*\" (" 
+    << std::fixed << gb << " GB)" << std::endl;
+}
 
 

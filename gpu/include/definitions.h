@@ -4,6 +4,9 @@
 #include <tuple>
 #include <numbers>
 
+#include "ranges.h"
+#include "csr.h"
+
 namespace type {
     using real_t = double;
 };
@@ -23,3 +26,12 @@ enum class solver {
 };
 
 constexpr double π = std::numbers::pi_v<double>;
+
+
+using range_t = numerics::linrange<double>;
+using real_t = type::real_t; 
+using vector_t = std::vector<real_t>;
+auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
+
+using csr_t = csr<type::real_t>;
+using csr_v = std::vector<csr<type::real_t>>;

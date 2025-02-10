@@ -1,0 +1,31 @@
+#pragma once
+
+#include "error.h"
+#include "components.h"
+#include "csr.h"
+#include "definitions.h"
+
+using real_t = type::real_t;
+
+void 
+compute_b(
+    csr_v      &B, 
+    components &sbp);
+
+void compute_b1(
+    csr_t        &B, 
+    csr_t        &H, 
+    real_t const  𝜏, 
+    csr_t        &L, 
+    real_t const  β, 
+    csr_t        &BS,
+    std::size_t  const   n);
+
+void compute_b2(
+    csr_t        &B, 
+    csr_t        &H, 
+    real_t const  𝜏, 
+    csr_t        &L, 
+    real_t const  β, 
+    csr_t        &BS,
+    std::size_t  const   n);
