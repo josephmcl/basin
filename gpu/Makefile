@@ -45,9 +45,10 @@ includes_local = -I./$(header_directory)
 includes_rocblas = -I$(rocm_install_directory)/include/rocblas
 includes_rocsolver = -I$(rocm_install_directory)/include/rocsolver
 includes_rocalution = -I$(rocm_install_directory)/include/rocalution
+includes_rocsparse = -I$(rocm_install_directory)/include/rocalution
 
-includes  := $(includes_local) $(includes_rocblas) $(includes_rocalution) $(includes_rocsolver)
-libraries := -L$(rocm_install_directory)/lib -lrocblas -lrocalution -lrocsolver
+includes  := $(includes_local) $(includes_rocblas) $(includes_rocalution) $(includes_rocsolver) $(includes_rocsparse)
+libraries := -L$(rocm_install_directory)/lib -lrocblas -lrocalution -lrocsolver -lrocsparse
 
 define speaker
 	@echo [make:$$PPID] $(1)

@@ -1,109 +1,108 @@
-#include "compute_g.h"
+#include <rocsparse.h>
+#include <hip/hip_runtime.h>
+#include <vector>
+#include <iostream>
+
+typedef double real_t;
 
 void compute_g(
-    real_t                            **g, 
-    std::vector<sparse_matrix_t>       &boundaries,
-    real_t                             *solutions,
-    real_t                             *sources, 
-    vv<std::size_t>                    &boundary_type_map,
-    vv<std::size_t>                    &boundary_data_map,
-    components                         &sbp) {
+    real_t** g, 
+    std::vector<rocsparse_mat_descr> &boundaries,  // rocsparse descriptors for boundary matrices
+    real_t* solutions,  // Device pointer
+    real_t* sources,    // Device pointer
+    std::vector<std::vector<std::size_t>> &boundary_type_map,
+    std::vector<std::vector<std::size_t>> &boundary_data_map,
+    components &sbp)  
+{
+    // 1) Create a ROCm rocsparse handle
+    rocsparse_handle handle;
+    rocsparse_create_handle(&handle);
 
-    // compute ith: (boundary * solution ...) - H_tilde sources[i]
-    //                       bm       bm         stat     m2 block 
-    //    v         v        v        v         v         v      
-    // (b_LB_W * g_LB_W + b_LB_S * g_LB_S) - H_tilde * F_LB[:]
+    // 2) Allocate memory for g and gtemp on the device
+    std::size_t total_size = sbp.n * sbp.n * sbp.rank_limit_u;
+    hipMalloc((void**)g, total_size * sizeof(real_t));
+    hipMemset(*g, 0, total_size * sizeof(real_t));
 
-    (*g) = (real_t *) MKL_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u, 64);
-    memset(*g, 0, sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u);
+    real_t* gtemp;
+    hipMalloc((void**)&gtemp, total_size * sizeof(real_t));
+    hipMemset(gtemp, 0, total_size * sizeof(real_t));
 
-    real_t *gtemp = (real_t *) MKL_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u, 64);
-    memset(gtemp, 0, sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u);
+    // 3) Get the H matrix (assumed already in CSR format)
+    rocsparse_mat_descr h_descr;
+    rocsparse_create_mat_descr(&h_descr);
+    rocsparse_set_mat_type(h_descr, rocsparse_matrix_type_general);
+    rocsparse_set_mat_index_base(h_descr, rocsparse_index_base_zero);
+
+    // Assume sbp.hl contains the CSR matrix for H.
+    rocsparse_int* h_row_ptr = sbp.hl.row_ptr;  // Device pointer
+    rocsparse_int* h_col_ind = sbp.hl.col_ind;  // Device pointer
+    real_t* h_values = sbp.hl.values;           // Device pointer
 
     std::size_t n2 = sbp.n * sbp.n;
     std::size_t face_size = sbp.n * sbp.n_blocks_dim;
-    real_t *gi, *gti, *solution, *source;
-    sparse_status_t status;
 
-    matrix_descr da;
-    da.type = SPARSE_MATRIX_TYPE_GENERAL;
+    for (std::size_t block = 0; block < sbp.rank_limit_u; ++block) {
+        std::size_t relblock = sbp.rank_index_u[block];
 
-    sparse_matrix_t h;
-    sbp.hl.mkl(&h);
+        // Compute offsets
+        real_t* gi_dev  = (*g) + (n2 * relblock);
+        real_t* gti_dev = gtemp + (n2 * relblock);
 
-    /*
-    sparse_matrix_t tmat;
-    csr<real_t> eye(sbp.n*sbp.n, sbp.n*sbp.n);
-    for (std::size_t i = 0; i < sbp.n * sbp.n; ++i) {
-      eye(1., i, i);
-    }
-    eye.mkl(&tmat);
-    
-    double *mtemp = (double *) mkl_malloc(sizeof(double) * sbp.n*sbp.n * sbp.n*sbp.n, 64);
-    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n * sbp.n; ++i) {
-      mtemp[i] = 0.;
-    }
-    mkl_sparse_d_spmmd(SPARSE_OPERATION_NON_TRANSPOSE, h, tmat, SPARSE_LAYOUT_ROW_MAJOR, mtemp, sbp.n*sbp.n);
-    */
-   
-    std::size_t relblock; 
-    for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
-        
-        //std::cout << "block " << block << std::endl;
-        relblock = sbp.rank_index_u[block];
-        // block is the local index local -> 0, 1, 2, ... 
-        // but relblock is element index --> k, k+1, k+2, ... 
-        gi = &(*g)[0] + (n2 * relblock);
-        gti = &(gtemp)[0] + (n2 * relblock);
-
-        
-        // 4 is known quantity as our blocks are rect. and orth.
         constexpr std::size_t faces = 4;
-        for (std::size_t face = 0; face != faces; ++face) {
-            
-            // b_type_index gives the types (direction) of a boundary
+        for (std::size_t face = 0; face < faces; ++face) {
             auto b_type_index = boundary_type_map[relblock][face];
             if (b_type_index != 0) {
-                
-                // std::cout << "face - " << face + ((b_type_index - 1) * faces) << std::endl;
-                // ti gives face + b_type_index 
                 auto ti = face + ((b_type_index - 1) * faces);
                 auto boundary = boundaries[ti];
 
-                // di gives which index of boundary data on a given face 
-                // [ 0][ 1][ 2] 
-                // each index is length n
-                // [..face 0..][..face 1..][..face 2..][..face 3..] 
-                // each face is length n * n_block_dim
-                // [...............boundary solution..............]
                 auto di = boundary_data_map[relblock][face] - 1;
-                solution = &solutions[0] + (face * face_size) + (di * sbp.n);
-                // gi += boundary:matrix * solution:vector
-                status = mkl_sparse_d_mv(
-                    SPARSE_OPERATION_NON_TRANSPOSE, 1., 
-                    boundary, da,
-                    solution, 
-                    1., gi);
-                mkl_sparse_status(status);
+                real_t* solution_dev = solutions + (face * face_size) + (di * sbp.n);
+
+                // Perform sparse matrix-vector multiplication: gi += boundary * solution
+                real_t alpha = 1.0;
+                real_t beta = 1.0;
+                rocsparse_dcsrmv(
+                    handle,
+                    rocsparse_operation_none,
+                    sbp.n, sbp.n, sbp.n,  // Assuming square blocks
+                    &al
+                    pha,
+                    boundary,
+                    solution_dev,
+                    &beta,
+                    gi_dev
+                );
             }
         }
-        
 
-        source = &sources[0] + (sbp.n * sbp.n * relblock);
+        // Negate source values using HIP kernel
+        hipLaunchKernelGGL(negate_kernel, (n2 + 255) / 256, 256, 0, 0, gti_dev, sources + (n2 * relblock), n2);
 
-        // std::size_t source_offset = relblock * sbp.n * sbp.n;
-
-        for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {
-            gti[i] = -source[i];
-        }
-
-        status = mkl_sparse_d_mv(
-            SPARSE_OPERATION_NON_TRANSPOSE, 1., 
-            h, da,
-            gti, 
-            1., gi);
-        mkl_sparse_status(status);
-
+        // Perform sparse matrix-vector multiplication: gi += H * gti
+        real_t alpha = 1.0;
+        real_t beta = 1.0;
+        rocsparse_dcsrmv(
+            handle,
+            rocsparse_operation_none,
+            sbp.n, sbp.n, sbp.n,  // Assuming square blocks
+            &alpha,
+            h_descr,
+            gti_dev,
+            &beta,
+            gi_dev
+        );
     }
 
+    // Destroy descriptors and free temporary memory
+    rocsparse_destroy_mat_descr(h_descr);
+    rocsparse_destroy_handle(handle);
+    hipFree(gtemp);
+}
+
+// HIP Kernel for negating an array
+__global__ void negate_kernel(real_t* output, real_t* input, std::size_t size) {
+    std::size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        output[idx] = -input[idx];
+    }
 }
