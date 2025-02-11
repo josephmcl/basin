@@ -19,7 +19,7 @@ template<typename T>
 struct csr {
     std::size_t n, m;
     std::vector<T> v;
-    std::vector<int> r, c;
+    std::vector<int> r, c, p;
 
     std::vector<T *> _a;
     std::vector<std::size_t *> _b;
@@ -210,7 +210,7 @@ void load_operator(csr<T> &mat, std::string key,
 
   double gb = ((sizeof(int) * (rsize + 1)) + (sizeof(int) * csize) 
     + (sizeof(T) * csize)) / 1e9;
-  std::cout << "Loaded csr data \"" << head + key << "*\" (" 
+  std::cout << "Loaded CSR data \"" << head + key << "*\" (" 
     << std::fixed << gb << " GB)" << std::endl;
 }
 

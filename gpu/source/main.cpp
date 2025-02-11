@@ -77,7 +77,40 @@ int main() {
   load_operator(M2, "M2", block_size_dim, block_count_dim);
   load_operator(λ,  "T",  block_size_dim, block_count_dim);
 
+  // TODO: Fill out 
 
+  // rocblas_status rocsolver_dcsrrf_refactchol(
+    // rocblas_handle handle, const rocblas_int n, 
+    // const rocblas_int nnzA, rocblas_int *ptrA, rocblas_int *indA, double *valA, 
+    // const rocblas_int nnzT, rocblas_int *ptrT, rocblas_int *indT, double *valT, rocblas_int *pivQ, rocsolver_rfinfo rfinfo)
+
+  rocblas_handle handle;
+  rocsolver_rfinfo info;
+  rocblas_create_handle(&handle);
+  rocsolver_create_rfinfo(&info, handle);
+  rocsolver_set_rfinfo_mode(info, rocsolver_rfinfo_mode_cholesky);
+
+  csr_t M1_chol = M1;
+  M1_chol.p.resize(M1.n);
+  auto s = rocsolver_dcsrrf_refactchol(
+    handle,
+    M1.n,
+    M1.nnz(), 
+    M1.row_index_data(),
+    M1.col_index_data(),
+    M1.val_data(),
+    M1_chol.nnz(), 
+    M1_chol.row_index_data(),
+    M1_chol.col_index_data(),
+    M1_chol.val_data(),
+    &M1_chol.p[0],
+    info
+  ); 
+
+  std::cout << s << std::endl;
+
+  rocblas_destroy_handle(handle);
+  rocsolver_destroy_rfinfo(info);
   /*
   
   
