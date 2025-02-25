@@ -35,3 +35,4 @@ auto static to_real_t = [](std::size_t n){return static_cast<real_t>(n);};
 
 using csr_t = csr<type::real_t>;
 using csr_v = std::vector<csr<type::real_t>>;
+

@@ -61,48 +61,19 @@ struct csr {
         return &r[0];
     }
 
-    /*
-    sparse_status_t mkl(
-        sparse_matrix_t *mkls, 
-        T alpha = T()) {
-        
-        T *data = val_data();
-        std::vector<T> temp;
-        if (alpha != T()) {
-            temp = v;
-            for (auto &e : temp) 
-                e *= alpha;
-            data = &temp[0];
+    T *dense() {
+        T *rv = (T *) malloc(sizeof(T) * n * m);
+        int i,j;
+        for(i=0; i< m * n; i++)
+            rv[i] = 0.0;
+        for(i = 0; i < n; i++) {
+            for(j = r[i]; j < r[i+1]; j++) {
+                int col_ind = c[j];
+                rv[i + n * col_ind] = v[j];    /*column major*/
+            }
         }
-
-        T *vv; std::size_t *rr, *cc;
-        vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
-        cc = (std::size_t *) mkl_malloc(sizeof(std::size_t) * c.size(), 64);
-        rr = (std::size_t *) mkl_malloc(sizeof(std::size_t) * r.size(), 64);
-        memset(vv, 0, sizeof(T) * v.size());
-        memset(cc, 0, sizeof(std::size_t) * c.size());
-        memset(rr, 0, sizeof(std::size_t) * r.size());
-
-        std::memcpy(vv, &data[0], sizeof(T) * v.size());
-        std::memcpy(cc, &c[0], sizeof(std::size_t) * c.size());
-        std::memcpy(rr, &r[0], sizeof(std::size_t) * r.size());
-
-        _a.push_back(vv);
-        _b.push_back(rr);
-        _b.push_back(cc);
-
-        auto rv = mkl_sparse_d_create_csr(
-            mkls, 
-            SPARSE_INDEX_BASE_ZERO,
-            n,
-            m,
-            &rr[0],
-            &rr[1],
-            &cc[0],
-            &vv[0]);
         return rv;
     }
-    */
 
     csr &operator()(T value, std::size_t row, std::size_t column) {
 
@@ -139,8 +110,8 @@ struct csr {
     }
     csr(std::size_t n, std::size_t m) : n(n), m(m) {
         this->v = std::vector<T>();
-		this->c = std::vector<std::size_t>();
-		this->r = std::vector<std::size_t>(n + 1, 0);
+		this->c = std::vector<int>();
+		this->r = std::vector<int>(n + 1, 0);
     }
     csr<T> &operator=(const csr<T> &that) {
         this->n = that.n;
@@ -151,8 +122,41 @@ struct csr {
         return *this;
     }
     csr(): n(0), m(0) { }
-    csr(csr const &that) { 
-        *this = that;
+    
+
+    csr(csr const &that, bool transpose = false) { 
+        if (!transpose) {
+            *this = that;
+            return;
+        }
+        else {
+
+            this->n = that.m;
+            this->m = that.n;
+            this->v.resize(that.nnz());
+            this->r.resize(that.m + 2);
+            this->c.resize(that.nnz());
+            
+            int count; 
+            for (std::size_t i = 0; i < that.nnz(); ++i) {
+                ++this->r[that.c[i] + 2];
+
+            }
+
+            for (std::size_t i = 2; i < this->r.size(); ++i) {
+                // create incremental sum
+                this->r[i] += this->r[i - 1];
+            }
+
+            for (int i = 0; i < that.n; ++i) {
+                for (int j = that.r[i]; j < that.r[i + 1]; ++j) {
+                    const int new_index = this->r[that.c[j] + 1]++;
+                    this->r[new_index] = that.r[j];
+                    this->c[new_index] = i;
+                }
+            }
+            this->r.pop_back(); 
+        }
     }
     /*
     ~csr() {
@@ -176,16 +180,24 @@ void load_operator(csr<T> &mat, std::string key,
     "_N_" + std::to_string(block_size) + "_L_" + 
     std::to_string(block_count) + "/";
 
+  int ndim, mdim;
+  std::ifstream ifs(head + key + ".ndim", std::ios::binary);
+  ifs.read(reinterpret_cast<char*>(&ndim), sizeof(int));
+  ifs.close();
+  ifs = std::ifstream (head + key + ".mdim", std::ios::binary);
+  ifs.read(reinterpret_cast<char*>(&mdim), sizeof(int));
+  ifs.close();
+
   int rsize, csize;
-  std::ifstream ifs(head + key + ".rsize", std::ios::binary);
+  ifs = std::ifstream(head + key + ".rsize", std::ios::binary);
   ifs.read(reinterpret_cast<char*>(&rsize), sizeof(int));
   ifs.close();
   ifs = std::ifstream (head + key + ".csize", std::ios::binary);
   ifs.read(reinterpret_cast<char*>(&csize), sizeof(int));
   ifs.close();
   
-  mat.n = rsize;
-  mat.m = rsize;
+  mat.n = ndim;
+  mat.m = mdim;
   mat.row_index_size(rsize + 1);
   mat.col_index_size(csize);
   mat.nnz(csize);
@@ -212,6 +224,11 @@ void load_operator(csr<T> &mat, std::string key,
     + (sizeof(T) * csize)) / 1e9;
   std::cout << "Loaded CSR data \"" << head + key << "*\" (" 
     << std::fixed << gb << " GB)" << std::endl;
+
+    //for (int i = 0; i < csize; ++i) {
+    //    std::cout << mat.val_data()[i] << " ";
+    //}
+    //std::cout << std::endl;
 }
 
 

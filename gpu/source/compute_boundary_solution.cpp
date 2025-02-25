@@ -1,0 +1,33 @@
+#include "compute_boundary_solution.h"
+
+// NOTE: Assumes number of grid points in x and y dims are equal. 
+void compute_boundary_solution(
+    double                     **g, 
+    std::vector<range_t>  const &ranges,
+    boundary_functions    const  bf, 
+    boundary_vectors      const  b) {
+
+    std::size_t size = 0;
+    for (auto &e: ranges) 
+        size += e.size();
+    std::size_t I = size;
+    std::size_t J = ranges[0].size();
+    size *= 4;
+
+    std::cout << "bs size " << sizeof(double) * size << std::endl;
+    (*g) = (double *) malloc(sizeof(double) * size);
+
+    for (std::size_t i = 0; i != 4; ++i) {
+        for (std::size_t j = 0; j != ranges.size(); ++j) {
+            auto range = ranges[j];            
+            for (auto e = range.begin(); e != range.end(); ++e) {
+                //std::cout << (I * i) + (J * j) + e.index << " " 
+                //    << b[i] << " " << *e << " " << bf[i](b[i], *e)
+                //    << " " << i << std::endl; 
+                (*g)[(I * i) + (J * j) + e.index] = (i < 2) 
+                    ? bf[i](b[i], *e) // E/W boundary
+                    : bf[i](*e, b[i]); // N/S boundary
+            }
+        }
+    }
+}

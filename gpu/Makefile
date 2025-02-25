@@ -38,16 +38,17 @@ mkdir = mkdir -p
 ln = ln -sf
 
 
-gccf_lags := -std=c++2a -Wall -Wpedantic  -O3 -finput-charset=UTF-8
-compiler_flags := $(gccf_lags) -g
+gcc_flags := -std=c++2a -Wall -Wpedantic -O0 -g -ggdb -finput-charset=UTF-8 -fopenmp --offload-arch=gfx942
+compiler_flags := $(gcc_flags)  -O0 -g -ggdb 
 
 includes_local = -I./$(header_directory)
 includes_rocblas = -I$(rocm_install_directory)/include/rocblas
 includes_rocsolver = -I$(rocm_install_directory)/include/rocsolver
+includes_rocsparse = -I$(rocm_install_directory)/include/rocsparse
 includes_rocalution = -I$(rocm_install_directory)/include/rocalution
 
-includes  := $(includes_local) $(includes_rocblas) $(includes_rocalution) $(includes_rocsolver)
-libraries := -L$(rocm_install_directory)/lib -lrocblas -lrocalution -lrocsolver
+includes  := $(includes_local) $(includes_rocblas) $(includes_rocalution) $(includes_rocsolver) $(includes_rocsparse)
+libraries := -L$(rocm_install_directory)/lib -lrocblas -lrocalution -lrocsolver -lrocsparse
 
 define speaker
 	@echo [make:$$PPID] $(1)
@@ -60,7 +61,7 @@ define compiler
 endef
 
 $(binary_directory)/$(target): $(objects)
-	$(call compiler, $(objects) -o $@ $(libraries))
+	$(call compiler, $(objects) -fopenmp --offload-arch=gfx942 -o $@ $(libraries))
 
 $(objects): $(object_directory)/%.o: \
 $(source_directory)/%.$(source_ext) $(object_directory_absent)

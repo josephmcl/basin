@@ -13,6 +13,13 @@
 #include "numerical.h"
 #include "csr.h"
 
+#define using_rocblas 1
+#ifdef using_rocblas
+  #include "rocblas.h"
+  using rocblas_handle_type = rocblas_handle;
+#else 
+  using rocblas_handle_type = void *;
+#endif
 
 // Make and store all the components needed to do SBP-SAT things. 
 class components {
@@ -21,8 +28,7 @@ public:
   components(
     std::size_t const points,
     real_t const span,
-    std::size_t const accuracy = 2) {
-    };
+    std::size_t const accuracy = 2);
 
   std::size_t const n = 0;
   real_t      const span = 0;
@@ -51,7 +57,8 @@ public:
 
   std::vector<real_t> h1v;
 
-/*
+  rocblas_handle_type rb_handle;
+
 private: 
   void make_bs();
   void make_l();
@@ -59,5 +66,4 @@ private:
   void make_h1();
   void make_hl();
   void make_d2();
-*/
 };
