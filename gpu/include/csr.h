@@ -64,8 +64,10 @@ struct csr {
     T *dense() {
         T *rv = (T *) malloc(sizeof(T) * n * m);
         int i,j;
+        #pragma omp parallel for target teams distribute
         for(i=0; i< m * n; i++)
             rv[i] = 0.0;
+        #pragma omp parallel for collapse(2) target teams distribute
         for(i = 0; i < n; i++) {
             for(j = r[i]; j < r[i+1]; j++) {
                 int col_ind = c[j];

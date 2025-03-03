@@ -3,6 +3,7 @@
 #include <vector>
 #include <tuple>
 #include <numbers>
+#include <type_traits>
 
 #include "ranges.h"
 #include "csr.h"
@@ -18,11 +19,33 @@ using real_p = type_p<type::real_t>;
 template <typename T>
 using vv = std::vector<std::vector<T>>;
 
-enum class solver {
-    sparse_qr, 
-    dense_cholesky,
-    rfp_cholesky,
-    pardiso
+enum class storage_type {
+    dense, 
+    csr
+};
+
+using storage = storage_type;
+struct solver_info {
+    bool         overwrite_b;
+    storage_type storage;
+};
+
+constexpr bool overwrite = true;
+constexpr bool pass_both = false;
+
+constexpr solver_info solver_info_key[] = {
+    {overwrite, storage::csr  },
+    {overwrite, storage::dense}}; // Used by dense cholesky.
+    
+enum class solver_t : std::size_t {
+    sparse_qr      = 0,
+    dense_cholesky = 1
+};
+
+/* */
+namespace solver {
+    storage_type storage(solver_t s);
+    bool overwrite(solver_t s);
 };
 
 constexpr double π = std::numbers::pi_v<double>;

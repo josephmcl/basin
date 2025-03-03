@@ -79,18 +79,25 @@ static void vector_csr(int m,
 {
 
   int nnz_per_row = nnz / m;
-  std::cout << nnz << " " << m << std::endl;
   int threads_per_row = prevPowerOf2(nnz_per_row);
   // limit the number of threads per row to be no larger than the wavefront (warp) size
   threads_per_row = threads_per_row > warpSize ? warpSize : threads_per_row;
-  int rows_per_block = threads_per_block / threads_per_row;
+
+
+  //std::cout << m << " " << nnz << std::endl;
+  //std::cout << threads_per_block << " " << threads_per_row << std::endl;
+
+  int rows_per_block;
+  if (threads_per_row > 0) {
+    rows_per_block = threads_per_block / threads_per_row;
+  }
+  else {
+    rows_per_block = 1;
+  }
   int num_blocks = (m + rows_per_block - 1) / rows_per_block;
 
   dim3 grid(num_blocks, 1, 1);
   dim3 block(threads_per_row, rows_per_block, 1);
-
-  std::cout << prevPowerOf2(nnz_per_row) << " " << std::endl;
-  std::cout << "dims " << num_blocks << " " << threads_per_row << " " << rows_per_block << std::endl;
   
   if (threads_per_row <= 2)
       vector_csr_kernel<2><<<grid, block>>>(m, row_offsets, cols, vals, x, y, alpha, beta);
@@ -219,12 +226,13 @@ void compute_g(
           solution = &solutions[0] + (face * face_size) + (di * sbp.n);
           // gi += boundary:matrix * solution:vector
           
-          scalar_csr(
+          vector_csr(
               boundary.n,
-              32, // 64, 
+              256, 
+              64, 
               boundary.row_index_data(),
               boundary.col_index_data(),
-              // boundary.nnz(),
+              boundary.nnz(),
               boundary.val_data(), 
               solution, 
               gi, 1., 0.);
@@ -240,13 +248,13 @@ void compute_g(
           gti[i] = -source[i];
       }
 
-      scalar_csr(
+      vector_csr(
         sbp.hl.n,
-        //256,
+        256,
         64, 
         sbp.hl.row_index_data(),
         sbp.hl.col_index_data(),
-        //sbp.hl.nnz(),
+        sbp.hl.nnz(),
         sbp.hl.val_data(), 
         gti, 
         gi, 1., 1.);
