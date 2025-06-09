@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
 
 #include "rocalution.hpp"
 #include "rocsolver.h"
+#include "rocblas.h"
 
 
 #include "definitions.h"
@@ -33,6 +34,9 @@ int main(int argc, char **argv) {
 #include "cholesky.h"
 #include "data.h"
 #include "connect.h"
+#include "io.h"
+#include "artifact.h"
+
 
 #include "omp.h"
 
@@ -41,55 +45,8 @@ int main(int argc, char **argv) {
 
 using real_t = type::real_t;
 
-void write_chol(real_t *m, std::size_t sz, components &sbp, std::string key) {
-  std::string dir = "../operator/";
-  dir += "V_";
-  dir += std::to_string(sbp.n * sbp.n * sbp.n_blocks_dim * sbp.n_blocks_dim); 
-  dir += "_N_";
-  dir += std::to_string(sbp.n); 
-  dir += "_L_";
-  dir += std::to_string(sbp.n_blocks_dim); 
-  namespace fs = std::filesystem;
-  fs::create_directories(dir);
-  std::ofstream out;
-  out.open(dir + "/" + key + ".cholesky_factors",
-    std::ios::out | std::ios::binary);
-  out.write(reinterpret_cast<const char*>(&m[0]), sizeof(real_t) * sz * sz);
-  out.close();
-  std::cout << dir + "/" + key + ".cholesky_factors " << std::endl;
-}
+int main(int argc, char **argv) {
 
-bool load_factors(real_t *m, std::size_t sz, components &sbp, std::string key) {
-  std::string dir = "../operator/";
-  dir += "V_";
-  dir += std::to_string(sbp.n * sbp.n * sbp.n_blocks_dim * sbp.n_blocks_dim); 
-  dir += "_N_";
-  dir += std::to_string(sbp.n); 
-  dir += "_L_";
-  dir += std::to_string(sbp.n_blocks_dim); 
-  dir += "/";
-  dir += key;
-  dir +=".cholesky_factors";
-
-  namespace fs = std::filesystem;
-  const fs::path p{dir};
-  if (fs::exists(p)) {
-    auto ifs = std::ifstream(dir, std::ios::binary);
-    ifs.read(
-      reinterpret_cast<char*>(m), 
-      sizeof(real_t) * sz * sz);
-    ifs.close();
-    double gb = (sizeof(real_t) * sz * sz) / 1e9;
-    std::cout << "Loaded dense cholesky factors \"" << dir << "*\" (" 
-    << std::fixed << gb << " GB)" << std::endl;
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-
-int main() {
 
   rocblas_handle rb_handle;
   rocblas_create_handle(&rb_handle);
@@ -99,8 +56,8 @@ int main() {
   rocblas_status   rbstatus;
   rocsparse_status rsstatus;
 
-  std::size_t vln = 125; //4; // 125 8 
-  std::size_t eln = 8; //3;
+  std::size_t vln = std::stoi(argv[1]); //, std::stoi(argv[2])10; //4; // 125 8 
+  std::size_t eln = std::stoi(argv[2]); // 4; //3;
 
   const std::size_t l_blocks = eln;
   const std::size_t n_blocks = l_blocks * l_blocks;
@@ -114,7 +71,7 @@ int main() {
   vv<std::size_t> interfaces;
   std::size_t n_interfaces = make_connectivity(interfaces, l_blocks); 
 
-  std::cout << "span " << span << std::endl;
+  // std::cout << "span " << span << std::endl;
 
   auto sbp = components{n, span};
   auto space = 0.5* (span/(n - 1));
@@ -162,26 +119,39 @@ int main() {
 
   // Generate the solution at the boundary. This implementation generates 
     // vectors from range functions. 
-    real_t *boundary_solution;
-    compute_boundary_solution(  
-        &boundary_solution, grids, {gdata.w, gdata.e, gdata.s, gdata.n}, {0., 1., 0., 1.});
+  real_t *boundary_solution;
+  compute_boundary_solution(  
+      &boundary_solution, grids, {gdata.w, gdata.e, gdata.s, gdata.n}, {0., 1., 0., 1.});
 
-    real_t *sources;
-    compute_sources(&sources, grids, gdata.source_function);
+  real_t *sources;
+  compute_sources(&sources, grids, gdata.source_function);
   
+  /*
   for (std::size_t i = 0; i < 144; ++i) {
-  //  std::cout << sources[i] <<  " ";
+    std::cout << sources[i] <<  " ";
   }
   std::cout << std::endl << std::endl;
     
   for (std::size_t i = 0; i < 48; ++i) {
-  //  std::cout << boundary_solution[i] <<  " ";
+    std::cout << boundary_solution[i] <<  " ";
   }
   std::cout << std::endl << std::endl;
+  */
 
   // compute_b(B, sbp);  
 
-  csr_t M0, M1, M2, λA;
+  using artefact = artifact<true>;
+
+  std::vector<artefact> MMM = {
+    {"M0", block_size_dim, block_count_dim},
+    {"M1", block_size_dim, block_count_dim},
+    {"M2", block_size_dim, block_count_dim}};
+
+  //MMM[0].load_cholesky_factors_sparse(rb_handle, sbp);
+  //MMM[1].load_cholesky_factors_sparse(rb_handle, sbp);
+  //MMM[2].load_cholesky_factors_sparse(rb_handle, sbp);
+
+  csr_t M0, M1, M2, λA, FE, FET;
 
   auto B  = std::vector<csr_t>(8);
   auto F  = std::vector<csr_t>(4);
@@ -213,19 +183,28 @@ int main() {
 
   vv<std::size_t> boundary_data_map;
   vv<std::size_t> boundary_order_map;
-  make_boundary_maps(boundary_data_map, boundary_order_map, l_blocks);
 
+ 
+
+  make_boundary_maps(boundary_data_map, boundary_order_map, l_blocks);
+    
+  
   // Compute the hybrid system g terms. 
   real_t *g;
   compute_g(&g, B, boundary_solution, sources, boundary_order_map, 
     boundary_data_map, sbp);
+
   std::cout << "Computed g" << std::endl;
 
+  /*
   for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
-  //  std::cout << g[i] <<  " ";
+    std::cout << g[i] <<  " ";
   }
 
+  // exit(-1);
+
   std::cout << std::endl;
+  */
   
 
   vv<std::size_t> F_symbols(n_blocks,           // rows 
@@ -236,6 +215,11 @@ int main() {
   compute_f_symbols(F_symbols, FT_symbols, interfaces, sbp);
   std::cout << "Computed F symbolic matrix." << std::endl; 
   
+  load_operator(FE,  "F",  block_size_dim, block_count_dim);
+  load_operator(FET,  "FT", block_size_dim, block_count_dim);
+  // FET = csr_t(FE, true);
+
+
   /*
   rocsparse_mat_descr descr;
   rocsparse_create_mat_descr(&descr);
@@ -258,6 +242,7 @@ int main() {
   
   int info;
 
+  using namespace io;
   if (!load_factors(M[0], M0.n, sbp, "M0")) {
     rbstatus = rocsolver_dpotf2(rb_handle, rocblas_fill_lower, M0.n, 
       M[0], M0.n, &info);
@@ -274,8 +259,10 @@ int main() {
       write_chol(M[0], M0.n, sbp, "M0");
     }
   }
+  print_csr(M[0], M0.n, sbp, "sparse_M0");
 
   if (!load_factors(M[1], M1.n, sbp, "M1")) {
+    
     rbstatus = rocsolver_dpotf2(rb_handle, rocblas_fill_lower, M1.n, 
       M[1], M1.n, &info);
     hipDeviceSynchronize();
@@ -291,6 +278,7 @@ int main() {
       write_chol(M[1], M1.n, sbp, "M1");
     }
   }
+  print_csr(M[1], M1.n, sbp, "sparse_M1");
   
   if (!load_factors(M[2], M2.n, sbp, "M2")) {
     rbstatus = rocsolver_dpotf2(rb_handle, rocblas_fill_lower, M2.n, 
@@ -308,6 +296,7 @@ int main() {
       write_chol(M[2], M2.n, sbp, "M2");
     }
   }
+  print_csr(M[2], M2.n, sbp, "sparse_M2");
 
   if (!load_factors(λλ, λA.n, sbp, "T")) {
     rbstatus = rocsolver_dpotf2(rb_handle, rocblas_fill_lower, λA.n, 
@@ -325,6 +314,7 @@ int main() {
       write_chol(λλ, λA.n, sbp, "T");
     }
   }
+  print_csr(λλ, λA.n, sbp, "sparse_T");
   
 
   std::vector<std::size_t> mi(sbp.n_blocks_dim, 1);
@@ -353,16 +343,22 @@ int main() {
   auto end = std::chrono::steady_clock::now();
   std::chrono::duration<double> dur;
 
-  Mg = (real_t *) malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u);
+  /*
+  std::cout << std::endl;
+  for (std::size_t i = 0; i < g_limit; ++i) {
+    std::cout <<  g[i] << " ";
+  }
+  std::cout << std::endl;*/
 
-  #pragma omp parallel for 
+  Mg = (real_t *) malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u);
+  #pragma omp parallel for target teams distribute requires unified_shared_memory
   for (std::size_t i = 0; i < g_limit; ++i) {
     Mg[i] = g[i];
   }
+  hipDeviceSynchronize();
 
   begin = std::chrono::steady_clock::now();
-
-  #pragma omp parallel for target teams distribute
+  #pragma omp parallel for private(gp, mgp, k)
   for (std::size_t i = 0; i < mg_limit; ++i) {
 
     /* Get the current thread index.                            */
@@ -373,6 +369,8 @@ int main() {
         the solution at this index.                              */
     auto ii = sbp.rank_index_u[i];
     k = mi[ii % sbp.n_blocks_dim];
+
+    // std::cout << k << std::endl;
     
     /* Look up the pointers to the correct                      */
     gp = &g[i * sbp.n * sbp.n];
@@ -380,42 +378,65 @@ int main() {
     
     /* Solve the local sub-problem.                             */
     if constexpr (s == solver_t::dense_cholesky) {
-      auto error = cholesky::solve(M[k], mgp, sbp);
+      auto error = cholesky::solve_no_sync(M[k], mgp, sbp);
       if (error) {
-          std::cout << "Choleksy solve failed code " 
+          std::cout << "Dense choleksy solve failed code " 
               << *error << std::endl;
       }
     }
   }
-
+  hipDeviceSynchronize();
   end = std::chrono::steady_clock::now();
   dur = end - begin;
-  std::cout << "Solved M^-1 * x = g. " <<  dur << std::endl;
+  std::cout << "Solved Mx = g. " <<  dur << std::endl;
 
-  // num_threads(sbp.n_threads)
-  
-  
-  //for (std::size_t i = 0; i < g_limit; ++i) {
-  //  std::cout << Mg[i] << std::endl;
-  //}
+  /*
+  for (std::size_t i = 0; i < g_limit; ++i) {
+    std::cout <<  Mg[i] << " ";
+  }
+  std::cout << std::endl;*/
 
+  /*
+  std::cout << std::endl;
+  for (std::size_t i = 0; i < g_limit; ++i) {
+    std::cout <<  Mg[i] << " ";
+  }
+  std::cout << std::endl;*/
+
+  // // // // // // // // // // // // // // // // // // // // // // //
   real_t *λb;
   std::size_t sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
   λb = (double *) malloc(sz);
   memset(λb, 0, sz);    
 
+  /*
+  for (auto e : FET.v)
+    std::cout << e << " ";
+    std::cout << std::endl;*/
+
   // Compute λb
   begin = std::chrono::steady_clock::now();
-  compute_lambda_b(λb, F, Mg, FT_symbols, sbp);
+  // compute_lambda_b(λb, F, Mg, FT_symbols, sbp);
+  compute_lambda_b_csr(λb, &FET, Mg, sbp);
   end = std::chrono::steady_clock::now();
   dur = end - begin;
   std::cout << "Computed λb (gd - F^T * M \\ g). " << dur << std::endl;
+  // // // // // // // // // // // // // // // // // // // // // // //
 
-  //for (std::size_t i = 0; i < sbp.n * sbp.n_interfaces; ++i) {
-  //  std::cout << λb[i] <<  " ";
-  //}
-  //std::cout << std::endl;
+ 
+  /*
+  std::cout << FE.n << " " << FE.m << std::endl;
+  std::cout << g_limit << " " << sbp.n * sbp.n_interfaces << std::endl;
 
+  std::cout << std::endl;
+  
+  for (std::size_t i = 0; i < sbp.n * sbp.n_interfaces; ++i) {
+    std::cout << λb[i] << " ";
+  }
+  std::cout << std::endl;*/
+
+
+  // // // // // // // // // // // // // // // // // // // // // // //
   double *λ = nullptr;
   const std::size_t λ_limit = sbp.n_interfaces * sbp.n;
   λ = (double *) malloc(sizeof(double) * λ_limit);
@@ -434,19 +455,19 @@ int main() {
   end = std::chrono::steady_clock::now();
   dur = end - begin;
   std::cout << "Solved λA * λ = λb. " <<  dur << std::endl;
+  // // // // // // // // // // // // // // // // // // // // // // //
 
-  //for (std::size_t i = 0; i < sbp.n_interfaces * sbp.n; ++i) {
-  //  std::cout << λ[i] <<  " ";
-  //}
-
+  
   const std::size_t rhs_limit = sizeof(real_t) * sbp.n * sbp.n * sbp.rank_limit_u;
   real_t *rhs = (double *) malloc(rhs_limit);
+  memset(rhs, 0, rhs_limit);    
   
   begin = std::chrono::steady_clock::now();
-  compute_rhs(rhs, g, FT, λ, F_symbols, sbp);
+  // compute_rhs(rhs, g, FT, λ, F_symbols, sbp);
+  compute_rhs_csr(rhs, g, FE, λ, sbp);
   end = std::chrono::steady_clock::now();
   dur = end - begin;
-  std::cout << "Computed rhs []. " <<  dur << std::endl;
+  std::cout << "Computed rhs " <<  dur << std::endl;
 
   real_t *u; 
   // NOTE: rank_limit_max here so we can gather the same size on 
@@ -455,77 +476,50 @@ int main() {
   u = (double *) malloc(sz);
   memset(u, 0, sz);
 
-  #pragma omp parallel default(none) shared(s, u, M, rhs, sbp, begin, end, mi, g_limit, mg_limit, M, dur) private(gp, mgp, k)
-  { 
-    /* Copy g into Mg if the solver requires it.                  */
+
+  // // // // // // // // // // // // // // // // // // // // // // //
+
+  #pragma omp for 
+  for (std::size_t i = 0; i < g_limit; ++i) {
+    u[i] = rhs[i];
+  }
+  hipDeviceSynchronize();
+
+  /*
+  for (std::size_t i = 0; i < g_limit; ++i) {
+    std::cout << u[i] << " ";
+  }*/
+
+  begin = std::chrono::steady_clock::now();
+  #pragma omp parallel for private(gp, mgp, k)
+  for (std::size_t i = 0; i < mg_limit; ++i) {
+
+    /* Get index of the solution vector for the rank-local
+       problem. Then, look up which M matrix is used to compute 
+       the solution at this index.                              */
+    auto ii = sbp.rank_index_u[i];
+    k = mi[ii % sbp.n_blocks_dim];
+    
+    /* Look up the pointers to the correct                      */
+    gp = &rhs[i * sbp.n * sbp.n];
+    mgp = &u[i * sbp.n * sbp.n];
+    
+    /* Solve the local sub-problem.                             */
     if constexpr (s == solver_t::dense_cholesky) {
-      #pragma omp for 
-      for (std::size_t i = 0; i < g_limit; ++i) {
-        u[i] = rhs[i];
+      auto error = cholesky::solve_no_sync(M[k], mgp, sbp);
+      if (error) {
+          std::cout << "Choleksy solve failed code " 
+              << *error << std::endl;
       }
     }
+  }
+  hipDeviceSynchronize();
+  end = std::chrono::steady_clock::now();
+  dur = end - begin;
+  std::cout << "Mu = rhs " <<  dur << std::endl;
+  // // // // // // // // // // // // // // // // // // // // // // //
 
-    #pragma omp for  
-    for (std::size_t i = 0; i < g_limit; ++i) { u[i] = 0.; }
-
-    /* */
-    if constexpr (s == solver_t::dense_cholesky) {
-      #pragma omp for 
-      for (std::size_t i = 0; i < g_limit; ++i) { u[i] = rhs[i]; }
-    }
-
-      /* Retrieve timing at the beginning of Mx = g.                */
-      #pragma omp single
-      { 
-        begin = std::chrono::steady_clock::now();
-      }
-
-      /* Compute Mx = g. For each sub-problem, grab the index of the 
-         memory for M, x (i.e. mg), and g. Pass those indices into 
-         the solver routine. */
-      #pragma omp for 
-      for (std::size_t i = 0; i < mg_limit; ++i) {
-
-        /* Get the current thread index.                            */
-        auto td = omp_get_thread_num();
-
-        /* Get index of the solution vector for the rank-local
-           problem. Then, look up which M matrix is used to compute 
-           the solution at this index.                              */
-        auto ii = sbp.rank_index_u[i];
-        k = mi[ii % sbp.n_blocks_dim];
-        
-        /* Look up the pointers to the correct                      */
-        gp = &rhs[i * sbp.n * sbp.n];
-        mgp = &u[i * sbp.n * sbp.n];
-        
-        /* Solve the local sub-problem.                             */
-        if constexpr (s == solver_t::dense_cholesky) {
-          auto error = cholesky::solve_no_sync(M[k], mgp, sbp);
-          if (error) {
-              std::cout << "Choleksy solve failed code " 
-                  << *error << std::endl;
-          }
-        }
-
-      }
-
-      /* Calculate timing for Mx = g.                               */
-      #pragma omp single
-      {
-        // __itt_task_end(domain);
-        hipDeviceSynchronize();
-        end = std::chrono::steady_clock::now();
-        //trace.push_back(end - begin);
-        dur = end - begin;
-        std::cout << "Computed u = M^-1 * rhs " <<  dur << std::endl;
-      } 
-
-      // #pragma omp single  
-      // for (std::size_t i = 0; i < g_limit; ++i) {
-      //   std::cout << Mg[i] << std::endl;
-      // }
-
-    } /* End OpenMP parallel region.                                */
+  std::cout << u[0] << " " << u[g_limit - 1] << std::endl;
+ 
 
 }

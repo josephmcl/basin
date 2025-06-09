@@ -8,7 +8,7 @@ void compute_sources(
     std::vector<range_t>                  const  &grids,
     std::function<real_t(real_t, real_t)> const   f) {
 
-    std::cout << "sources size: " << grids.size() * grids.size() * grids[0].size() * grids[0].size() << std::endl;
+    // std::cout << ": " << grids.size() * grids.size() * grids[0].size() * grids[0].size() << std::endl;
     (*F) = (real_t *) malloc(sizeof(real_t) * grids.size() * grids.size() * grids[0].size() * grids[0].size());
     std::size_t i = 0;
     std::size_t v;

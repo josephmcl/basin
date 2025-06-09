@@ -5,14 +5,20 @@
 /* STL headers       */
 #include <tuple>
 #include <optional>
+#include <climits>
 
 /* Project headers   */
 #include "components.h"
 #include "csr.h"
 #include "error.h"
 
+#include "rocblas.h"
+#include "rocsolver.h"
+
+
 // TODO: move this to definitions.h
 using error = std::optional<int>;
+
 
 namespace cholesky {
         

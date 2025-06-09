@@ -1,6 +1,5 @@
 #include "compute_rhs.h"
 
-
 #include "hip/hip_runtime.h"
 
 static unsigned long prevPowerOf2(unsigned long v) {
@@ -101,6 +100,51 @@ static void vector_csr(int m,
     
 }
 
+__global__ static void scalar_csr_kernel(const int m,
+  const int *__restrict__ row_offsets,
+  const int *__restrict__ cols,
+  const double *__restrict__ vals,
+  const double *__restrict__ x,
+  double *__restrict__ y,
+  const double alpha,
+  const double beta)
+{
+  const int row = threadIdx.x + blockDim.x * blockIdx.x;
+  if (row < m) {
+    // determine the start and ends of each row
+    int p = row_offsets[row];
+    int q = row_offsets[row+1];
+    // run the full sparse row * vector dot product operation
+    double sum = 0;
+    for (int i = p; i < q; i++) {
+      sum += vals[i] * x[cols[i]];
+    }
+    // write to memory
+    if (beta == 0) {
+      y[row] = alpha * sum;
+    } else {
+      y[row] = alpha * sum + beta * y[row];
+    }
+  }
+}
+
+static void scalar_csr(
+  int m,
+  int threads_per_block,
+  int * row_offsets,
+  int * cols,
+  double * vals,
+  double * x,
+  double * y,
+  double alpha,
+  double beta)
+{
+  int num_blocks = (m + threads_per_block - 1) / threads_per_block;
+  dim3 grid(num_blocks, 1, 1);
+  dim3 block(threads_per_block, 1, 1);
+  scalar_csr_kernel<<<grid, block>>>(m, row_offsets, cols, vals, x, y, alpha, beta);
+}
+
 void compute_rhs(
     real_t *rhs,
     real_t *g, 
@@ -123,7 +167,7 @@ void compute_rhs(
 
     std::size_t i, j, k;
     double *l, *r;
-    // #pragma omp parallel for private(i, j, k, l, r) 
+    //#pragma omp parallel target teams distribute for private(i, j, k, l, r) 
     for (std::size_t a = 0; a < temp.size(); ++a) {
         i = std::get<0>(temp[a]);
         j = std::get<1>(temp[a]);
@@ -152,8 +196,49 @@ void compute_rhs(
             r, 1., 1.);
     }
     
+    // #pragma omp parallel target teams distribute for // requires unified_shared_memory
     for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
         rhs[i] += g[i];
     }
 
 } 
+
+void compute_rhs_csr(
+  real_t     *rhs,
+  real_t     *g, 
+  csr_t      &F,
+  real_t     *λ,
+  components &sbp) {
+
+    vector_csr(
+      F.n,
+      256,
+      64, 
+      F.row_index_data(),
+      F.col_index_data(),
+      F.nnz(),
+      F.val_data(), 
+      λ, 
+      rhs, -1., 1.);
+
+    /*
+    scalar_csr(
+      F.n,
+      //256,
+      64, 
+      F.row_index_data(),
+      F.col_index_data(),
+      //F.nnz(),
+      F.val_data(), 
+      λ, 
+      rhs, -1., 1.);*/
+
+    hipDeviceSynchronize();
+    //#pragma omp parallel target teams distribute for // requires unified_shared_memory
+    for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+        rhs[i] += g[i];
+    }
+    
+  }
+
+  

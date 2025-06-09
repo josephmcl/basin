@@ -8,7 +8,8 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
-
+#include <cstdlib>
+#include <limits>
 
 //#include "mkl.h"
 //#include "mkl_spblas.h"
@@ -110,6 +111,25 @@ struct csr {
         //}
         return *this;
     }
+
+    csr(T *v, std::size_t n, std::size_t m, bool cm = false) : n(n), m(m) {
+        this->v = std::vector<T>();
+		this->c = std::vector<int>();
+		this->r = std::vector<int>(n + 1, 0);
+        std::size_t index = 0;
+        for (std::size_t i = 0; i < n; ++i) {
+            for (std::size_t j = 0; j < m; ++j) {
+                index = (!cm) ? (n * i) + j : (m * j) + i;
+                //if (v[index] != 0) {
+                if (std::abs(v[index]) >= std::numeric_limits<double>::epsilon()) {
+                    //std::cout << v[index] << " " << i << " " << j << std::endl;
+                    (*this)(v[index], i, j);
+                }
+                
+            }
+        }
+    }
+
     csr(std::size_t n, std::size_t m) : n(n), m(m) {
         this->v = std::vector<T>();
 		this->c = std::vector<int>();
@@ -153,7 +173,7 @@ struct csr {
             for (int i = 0; i < that.n; ++i) {
                 for (int j = that.r[i]; j < that.r[i + 1]; ++j) {
                     const int new_index = this->r[that.c[j] + 1]++;
-                    this->r[new_index] = that.r[j];
+                    this->v[new_index] = that.v[j];
                     this->c[new_index] = i;
                 }
             }

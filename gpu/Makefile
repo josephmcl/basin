@@ -9,7 +9,7 @@ rocm_install_directory = ${ROCM_INSTALL_DIRECTORY}
 target = $(application).$(platform).$(hardware) 
 symlink = ./latest
 
-rocm_compiler   := hipcc
+rocm_compiler   := hipcc -g
 native_compiler := gcc
 
 ifeq ($(platform), rocm)

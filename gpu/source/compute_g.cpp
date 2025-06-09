@@ -192,8 +192,10 @@ void compute_g(
     constexpr double alpha = 1.;
 
     std::size_t relblock; 
+
+
+    // #pragma omp parallel for private(relblock, gi, gti, solution)
     for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
-        
         
       //std::cout << "block " << block << std::endl;
       relblock = sbp.rank_index_u[block];
@@ -226,7 +228,8 @@ void compute_g(
           solution = &solutions[0] + (face * face_size) + (di * sbp.n);
           // gi += boundary:matrix * solution:vector
           
-          vector_csr(
+          
+          /*vector_csr(
               boundary.n,
               256, 
               64, 
@@ -236,10 +239,39 @@ void compute_g(
               boundary.val_data(), 
               solution, 
               gi, 1., 0.);
-          hipDeviceSynchronize();
+          hipDeviceSynchronize();*/
+
+          //std::cout << "g index: " << relblock << std::endl;
+          
+          scalar_csr(
+            boundary.n,
+            // 256, 
+            64, 
+            boundary.row_index_data(),
+            boundary.col_index_data(),
+            //boundary.nnz(),
+            boundary.val_data(), 
+            solution, 
+            gi, 1., 0.);
+
+            // Sync the inner loop
+            hipDeviceSynchronize();
         }
       }
-      
+    }
+
+    // hipDeviceSynchronize();
+
+    // #pragma omp parallel for private(relblock, gi, gti, solution)
+    for (std::size_t block = 0; block != sbp.rank_limit_u; ++block) {
+    
+      //std::cout << "block " << block << std::endl;
+      relblock = sbp.rank_index_u[block];
+      // block is the local index local -> 0, 1, 2, ... 
+      // but relblock is element index --> k, k+1, k+2, ... 
+      gi = &(*g)[0] + (n2 * relblock); 
+      gti = &(gtemp)[0] + (n2 * relblock);
+
       source = &sources[0] + (sbp.n * sbp.n * relblock);
 
       // std::size_t source_offset = relblock * sbp.n * sbp.n;
@@ -248,6 +280,8 @@ void compute_g(
           gti[i] = -source[i];
       }
 
+      
+      /*
       vector_csr(
         sbp.hl.n,
         256,
@@ -258,6 +292,26 @@ void compute_g(
         sbp.hl.val_data(), 
         gti, 
         gi, 1., 1.);
-      hipDeviceSynchronize();
+      */
+      
+      scalar_csr(
+        sbp.hl.n,
+        //256,
+        64, 
+        sbp.hl.row_index_data(),
+        sbp.hl.col_index_data(),
+        //sbp.hl.nnz(),
+        sbp.hl.val_data(), 
+        gti, 
+        gi, 1., 1.);
+        hipDeviceSynchronize();
   }
+  
+
+  /*
+  std::cout << std::endl;
+  for (std::size_t i = 0; i < 40; ++i) {
+    std::cout << g[i] << " ";
+  }
+  std::cout << std::endl;*/
 }

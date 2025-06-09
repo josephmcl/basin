@@ -14,7 +14,6 @@ void compute_boundary_solution(
     std::size_t J = ranges[0].size();
     size *= 4;
 
-    std::cout << "bs size " << sizeof(double) * size << std::endl;
     (*g) = (double *) malloc(sizeof(double) * size);
 
     for (std::size_t i = 0; i != 4; ++i) {
