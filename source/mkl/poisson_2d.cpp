@@ -456,18 +456,21 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
       for (std::size_t i = 0; i != sbp.rank_limit_iu * sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
           if (LAMBDAA[i * sbp.n_interfaces * sbp.n + j] != 0) {
-            std::cout << sbp.rank << " " << i  + (sbp.rank_index_iu[0] * sbp.n)<< std::endl;
+            std::cout << sbp.rank << " row " << i  + (sbp.rank_index_iu[0] * sbp.n) << " col " << j << " val " << LAMBDAA[i * sbp.n_interfaces * sbp.n + j] << std::endl;
             lambda_a_s(LAMBDAA[i * sbp.n_interfaces * sbp.n + j], i  + (sbp.rank_index_iu[0] * sbp.n) , j);
           }
         }
       }
 
-      if (sbp.rank == 1) {
-        std::cout << "wahoo" << std::endl;
-        std::cout << lambda_a_s.r[0] << " " << lambda_a_s.c[0];
-        std::cout << lambda_a_s.r[1] << " " << lambda_a_s.c[1];
-        std::cout << "wahoo" << std::endl;
-      }
+      std::cout << "wahoo" << std::endl;
+      std::cout << lambda_a_s.r[0] << " " << lambda_a_s.c[0] << " " << lambda_a_s.v[0] <<std::endl;
+      std::cout << lambda_a_s.r[1] << " " << lambda_a_s.c[1] << " " << lambda_a_s.v[1] <<std::endl;
+      std::cout << "wahoo" << std::endl;
+
+      // TODO: for ranks > 0 we have to manually set the row pointers 
+      //       to sbp.rank_index_iu[0] * sbp.n because the csr struct
+      //       is too smart and always wants to start at zero...
+      
       // lambda_a_s.mkl(&lam_a_spa);
 
       begin = timing::read();
