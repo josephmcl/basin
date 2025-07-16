@@ -1,5 +1,6 @@
 
 #include "compute_lambda_b.h"
+#include <omp.h>
 
 void compute_lambda_b(
     real_t *LAMBDAb, 
@@ -15,7 +16,7 @@ void compute_lambda_b(
 
     std::size_t findex, j_global;
     double * lb, *mg;
-    #pragma omp parallel for collapse(2) private(findex, lb, mg, status) num_threads(7)
+    #pragma omp parallel for collapse(2) private(findex, lb, mg, status) num_threads(sbp.n_threads) 
     for (std::size_t i = 0; i < sbp.n_interfaces; ++i) {
         for (std::size_t j = 0; j < sbp.rank_limit_u; ++j) {
             j_global = sbp.rank_index_u[j];

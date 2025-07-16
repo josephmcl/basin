@@ -13,7 +13,7 @@ void compute_mg(
     double *gp, *mgp;
     std::size_t k;
     std::size_t limit = sbp.rank_limit_u;   
-    #pragma omp parallel for private(gp, mgp, k)
+    #pragma omp parallel for private(gp, mgp, k) // num_threads(sbp.n_threads)
     for (std::size_t i = 0; i < limit; ++i) {
         auto td = omp_get_thread_num();
         gp = &g[i * sbp.n * sbp.n];

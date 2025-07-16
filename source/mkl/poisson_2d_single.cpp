@@ -224,11 +224,11 @@ void poisson_2d::single(components &sbp) {
 
 
     double *tmp = (double *) mkl_malloc(sizeof(double) * sbp.n * sbp.n * 4, 64);
-    dcg_init(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+    dcg_init(&n, u, g, &request, (MKL_INT *) &ipar, (double *) &dpar, tmp);
 
     std::cout << "request: " << (int) request << std::endl;
 
-    dcg_check(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+    dcg_check(&n, u, g, &request, (MKL_INT *) &ipar, (double *) &dpar, tmp);
 
     std::cout << "request: " << (int) request << std::endl;
 
@@ -238,7 +238,7 @@ void poisson_2d::single(components &sbp) {
     request = 1;
     begin = timing::read();
     while (!converged) {
-        dcg(&n, u, g, &request, (int *) &ipar, (double *) &dpar, tmp);
+        dcg(&n, u, g, &request, (MKL_INT *) &ipar, (double *) &dpar, tmp);
         if (request == 1) {
             // compute tmp[n^2] = A * tmp[0]
             status = mkl_sparse_d_mv(
@@ -257,7 +257,7 @@ void poisson_2d::single(components &sbp) {
     std::cout << "request: " << (int) request << std::endl;
 
     MKL_INT niter;
-    dcg_get(&n, u, g, &request, (int *) ipar, (double *) dpar, tmp, &niter);
+    dcg_get(&n, u, g, &request, (MKL_INT *) ipar, (double *) dpar, tmp, &niter);
     std::cout << "iterations: " << niter << std::endl;
     std::cout << "CG solve, " << end - begin << std::endl;
 
@@ -277,8 +277,8 @@ void poisson_2d::single(components &sbp) {
     std::cout << "QR direct solve, " << end - begin << std::endl;
     
 
-    for (std::size_t i = 0; i != 20; ++i) {
-        //std::cout << u[i] << " ";
+    for (std::size_t i = 0; i != 144; ++i) {
+        std::cout << u[i] << ", ";
     }
     std::cout << std::endl;
     for (std::size_t i = 0; i != sbp.n * sbp.n; ++i) {

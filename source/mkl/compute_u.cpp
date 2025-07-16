@@ -13,7 +13,7 @@ void compute_u(
     double *up, *rp;
     std::size_t k;
 
-    #pragma omp parallel for private(up, rp, k) 
+    #pragma omp parallel for private(up, rp, k) // num_threads(sbp.n_threads)
     for (std::size_t i = 0; i < sbp.rank_limit_u; ++i) {
         auto td = omp_get_thread_num();
         auto ii = sbp.rank_index_u[i];

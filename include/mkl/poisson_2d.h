@@ -40,6 +40,6 @@
 
 namespace poisson_2d {
 
-    void problem(std::size_t vln, std::size_t eln);
+    void problem(std::size_t n, std::size_t l, std::size_t w = 0);
 
 }

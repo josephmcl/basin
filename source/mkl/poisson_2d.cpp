@@ -1,18 +1,27 @@
 #include "poisson_2d.h"
+#include "csr.h"
 
-void poisson_2d::problem(std::size_t vln, std::size_t eln) {
+enum class workflow {
+    csr, sbcsr 
+};
+
+void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
     
     
 
     timing::init();
-
-
-    // omp_set_nested(1);
+  
+    //omp_set_dynamic(true);
+    omp_set_nested(true);
+    omp_set_max_active_levels(4);
+    
 
     const std::size_t l_blocks = eln;
     const std::size_t n_blocks = l_blocks * l_blocks;
     auto span = 1. / static_cast<double>(l_blocks);
     
+  
+    workflow wf = (w == 0)? workflow::csr : workflow::sbcsr;
 
     auto n_points_x = vln;
     auto n = vln;
@@ -22,9 +31,11 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     auto sbp = components{n, span};
 
-    sbp.TAU_VALUE = (2/ span) + (2 / (span * (span/(n - 1)))) * 10; 
+    auto space = 0.5* (span/(n - 1));
+    sbp.TAU_VALUE = (2/ span) + (2 / (span * (space/span)));
+    // sbp.TAU_VALUE = (2/ span) + (2 / (span * (span/(n - 1)))) * 10; 
     // std::cout << "TAU_VALUE " << sbp.TAU_VALUE << std::endl;
-    sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
+    // sbp.TAU_VALUE = (sbp.TAU_VALUE < 42.)? 42.: sbp.TAU_VALUE; // hard code these coeffs for now. 
     sbp.BETA_VALUE = 1.;
 
     auto gw = [](real_t x, real_t y){return std::sin(PI_VALUE * x + PI_VALUE * y);};
@@ -80,13 +91,74 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
         ? (sbp.n_blocks / sbp.n_ranks) + 1
         : (sbp.n_blocks / sbp.n_ranks);
 
+        
+    std::size_t interface_alignment = sbp.n_interfaces % sbp.n_ranks;          
+    sbp.rank_limit_iu = (sbp.rank < interface_alignment) 
+            ? (sbp.n_interfaces / sbp.n_ranks) + 1
+            : (sbp.n_interfaces / sbp.n_ranks);
+
     // slack adjusts the index the latter, smaller indices to align with
     // the larger, earlier indices. 
+
     std::size_t slack = (sbp.rank < alignment)? 0: std::min(sbp.rank, alignment);
+    
+    if (sbp.rank == 0) {
+      std::size_t r_limit, begin_range, end_range, cat;
+      std::cout << "Distributed solution range; blocks = " 
+        << sbp.n_blocks << std::endl << "[";
+      cat = 0;
+      for (std::size_t i = 0; i < sbp.n_ranks; ++i) {
+
+        if (i < alignment) {
+          r_limit = (sbp.n_blocks / sbp.n_ranks) + 1;
+          begin_range = cat + slack + r_limit * i + 0;
+          end_range = cat + slack + r_limit * i + r_limit - 1;
+          cat += 1;
+        }
+        else {
+          r_limit = (sbp.n_blocks / sbp.n_ranks);
+          begin_range = cat + slack + r_limit * i + 0;
+          end_range = cat + slack + r_limit * i + r_limit - 1;
+        }
+        std::cout << begin_range << " ... " << end_range; 
+        if (i < sbp.n_ranks - 1)  std::cout << " | "; 
+      }
+      std::cout << "]" << std::endl; 
+    }
+
     for (std::size_t i = 0; i != sbp.rank_limit_u; ++i) {
         sbp.rank_index_u.push_back(slack + sbp.rank_limit_u * sbp.rank + i);
     }
 
+    slack = (sbp.rank < interface_alignment)? 0: std::min(sbp.rank, interface_alignment);
+    for (std::size_t i = 0; i != sbp.rank_limit_iu; ++i) {
+        sbp.rank_index_iu.push_back(slack + sbp.rank_limit_iu * sbp.rank + i);
+    }
+
+    if (sbp.rank == 0) {
+      std::size_t r_limit, begin_range, end_range, cat;
+      std::cout << "Distributed interfaces range; interfaces = " 
+        << sbp.n_interfaces << std::endl << "[";
+      cat = 0;
+      for (std::size_t i = 0; i < sbp.n_ranks; ++i) {
+
+        if (i < interface_alignment) {
+          r_limit = (sbp.n_interfaces / sbp.n_ranks) + 1;
+          begin_range = cat + slack + r_limit * i + 0;
+          end_range = cat + slack + r_limit * i + r_limit - 1;
+          cat += 1;
+        }
+        else {
+          r_limit = (sbp.n_interfaces / sbp.n_ranks);
+          begin_range = cat + slack + r_limit * i + 0;
+          end_range = cat + slack + r_limit * i + r_limit - 1;
+        }
+        std::cout << begin_range << " ... " << end_range; 
+        if (i < sbp.n_ranks - 1)  std::cout << " | "; 
+      }
+      std::cout << "]" << std::endl; 
+    }
+  
     //
     // End MPI parameters.
     //
@@ -151,6 +223,16 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       << std::endl;
     }
 
+    if (sbp.rank == 0) {
+      if (wf == workflow::csr) {
+        std::cout << "MODE 0 (CSR CASE)" << std::endl;
+      }
+      else {
+        std::cout << "MODE 1 (SBCSR CASE)" << std::endl;
+      }
+    }
+
+
     auto trace = std::vector<double>();
     
     auto M = vv<sparse_matrix_t>();
@@ -197,6 +279,82 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed F." << std::endl;
 
+    //////////// NOTE: begin block from Picard branch. ///////////////
+    //////////////////////////////////////////////////////////////////
+
+    if (sbp.rank == 0) {
+      std::cout << "Compute Explicit F and F^T." << std::endl; 
+      begin = timing::read();
+    }
+
+    std::size_t i_global, j_global;
+    /*
+    //std::cout << "DIMS " << sbp.n * sbp.n * sbp.rank_limit_iu << " " << sbp.n * F_symbols[0].size() << std::endl;
+    csr<real_t> FBig (sbp.n * sbp.n * sbp.rank_limit_iu, sbp.n * F_symbols[0].size()); 
+    for (int i = 0; i < sbp.rank_limit_iu; ++i) {
+      for (int j = 0; j < F_symbols[0].size(); ++j) {
+        i_global = sbp.rank_index_iu[i];
+        if (F_symbols[i_global][j] != 0) {
+          int findex = F_symbols[i_global][j] - 1;
+          for (int q = 0; q < sbp.n * sbp.n; ++q) {
+            for (int p = 0; p < sbp.n; ++p) {
+              //std::cout << Fdense[findex][p + q * sbp.n] << " ";
+              if (Fdense[findex][p + q * sbp.n] != 0) {
+                double v = Fdense[findex][p + q * sbp.n];
+                //std::cout << i * sbp.n * sbp.n + q << ", " << j * sbp.n + p << ")" << std::endl;
+                FBig(v, 
+                  i * sbp.n * sbp.n + q,
+                  j * sbp.n + p);
+              }
+            }
+          }
+        }
+      }
+    }
+    */
+
+    csr<real_t> FBigT (sbp.n * sbp.n * sbp.rank_limit_u, sbp.n *sbp.n_interfaces); 
+    // #pragma omp parallel for collapse(2) private(j_global)
+    for (int i = 0; i < sbp.rank_limit_u; ++i) {
+      for (int j = 0; j < sbp.n_interfaces; ++j) {
+        i_global = sbp.rank_index_u[i];
+        if (F_symbols[i_global][j] != 0) {
+          int findex = F_symbols[i_global][j] - 1;
+          for (int q = 0; q < sbp.n * sbp.n; ++q) {
+            for (int p = 0; p < sbp.n; ++p) {
+              if (Fdense[findex][q * sbp.n + p] != 0) {
+                double v = Fdense[findex][q * sbp.n + p];
+                //std::cout << j * sbp.n + p << " " << i * sbp.n * sbp.n  + q << std::endl;
+                // #pragma omp critical
+                FBigT(v, 
+                  i * sbp.n * sbp.n + q,
+                  j * sbp.n + p);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Convert to MKL format. 
+    //sparse_matrix_t FBigMKL;
+    sparse_matrix_t FBigMKLT;
+    //status = FBig.mkl(&FBigMKL);
+    //mkl_sparse_status(status);
+    status = FBigT.mkl(&FBigMKLT);
+    mkl_sparse_status(status);
+
+    std::cout << "dim a " << FBigT.n << std::endl;
+    std::cout << "dim b " << FBigT.m << std::endl;
+
+    if (sbp.rank == 0) {
+      end = timing::read();
+      std::cout << end - begin << " s to compute F & F^T." << std::endl;
+    }
+
+    ///////////// NOTE: end block from Picard branch. ////////////////
+    //////////////////////////////////////////////////////////////////
+
     std::vector<real_t *> MF;
     MF.resize(M[0].size() * Fdense.size());
     for (std::size_t index = 0; index != MF.size(); ++index) {
@@ -238,43 +396,88 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       
     }
 
+    bool single_rank_trace = false;
     sparse_matrix_t lam_a_spa;
-    if (sbp.rank == 0) {
-      
-      // Compute LAMBDAA.
+    if (single_rank_trace) {
+      if (sbp.rank == 0) {
+        
+        // Compute LAMBDAA.
+        begin = timing::read();
+          compute_lambda_a(LAMBDAA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
+        end = timing::read();
+        trace.push_back(end - begin);
+
+        csr<double> lambda_a_s(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
+        for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
+          for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
+            if (LAMBDAA[i * sbp.n_interfaces * sbp.n + j] != 0) {
+              lambda_a_s(LAMBDAA[i * sbp.n_interfaces * sbp.n + j], i , j);
+            }
+          }
+        }
+        lambda_a_s.mkl(&lam_a_spa);
+
+        begin = timing::read();
+          status = mkl_sparse_qr_reorder(lam_a_spa, dc);
+          mkl_sparse_status(status);
+          status = mkl_sparse_d_qr_factorize(lam_a_spa, nullptr);
+          mkl_sparse_status(status);
+        end = timing::read();
+        //logging::out << std::setw(14) << std::fixed << end - begin 
+        // << " s # alt factorize" << std::endl;
+
+        // Setup direct solver.  
+        //begin = timing::read();
+        //initialize_lambda(LAMBDAA, piv, sbp);
+        //end = timing::read();
+        trace.push_back(end - begin);
+      }
+      else {
+        trace.push_back(0);
+        trace.push_back(0);
+      }
+    }
+    else {
+
+      LAMBDAA = (double *) mkl_malloc(
+        sizeof(double) * sbp.n * sbp.n_interfaces * sbp.n * sbp.rank_limit_iu, 64);
+      for (std::size_t i = 0; i != sbp.n * sbp.n_interfaces * sbp.n * sbp.rank_limit_iu; ++i) {
+        LAMBDAA[i] = 0;
+      }
+
+      // Compute portion of LambdaA on each rank
       begin = timing::read();
-      compute_lambda_a(LAMBDAA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
+        compute_lambda_a_mpi(LAMBDAA, &D, Fsparse, MF, F_symbols, FT_symbols, sbp);
       end = timing::read();
       trace.push_back(end - begin);
 
+      // Create a sparse version of each 
       csr<double> lambda_a_s(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
-      for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
+      for (std::size_t i = 0; i != sbp.rank_limit_iu * sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
           if (LAMBDAA[i * sbp.n_interfaces * sbp.n + j] != 0) {
-            lambda_a_s(LAMBDAA[i * sbp.n_interfaces * sbp.n + j], i , j);
+            std::cout << sbp.rank << " " << i  + (sbp.rank_index_iu[0] * sbp.n)<< std::endl;
+            lambda_a_s(LAMBDAA[i * sbp.n_interfaces * sbp.n + j], i  + (sbp.rank_index_iu[0] * sbp.n) , j);
           }
         }
       }
-      lambda_a_s.mkl(&lam_a_spa);
+
+      if (sbp.rank == 1) {
+        std::cout << "wahoo" << std::endl;
+        std::cout << lambda_a_s.r[0] << " " << lambda_a_s.c[0];
+        std::cout << lambda_a_s.r[1] << " " << lambda_a_s.c[1];
+        std::cout << "wahoo" << std::endl;
+      }
+      // lambda_a_s.mkl(&lam_a_spa);
 
       begin = timing::read();
-        status = mkl_sparse_qr_reorder(lam_a_spa, dc);
+      /*  status = mkl_sparse_qr_reorder(lam_a_spa, dc);
         mkl_sparse_status(status);
         status = mkl_sparse_d_qr_factorize(lam_a_spa, nullptr);
-        mkl_sparse_status(status);
+        mkl_sparse_status(status);*/
       end = timing::read();
-      //logging::out << std::setw(14) << std::fixed << end - begin 
-      // << " s # alt factorize" << std::endl;
 
-      // Setup direct solver.  
-      //begin = timing::read();
-      //initialize_lambda(LAMBDAA, piv, sbp);
-      //end = timing::read();
       trace.push_back(end - begin);
-    }
-    else {
-      trace.push_back(0);
-      trace.push_back(0);
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -285,10 +488,32 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     Mg = (double *) mkl_malloc(sz, 64);
     memset(Mg, 0, sz);
 
+    std::cout << "dim a " << sz / sizeof(real_t) << std::endl;
+
     begin = timing::read();
     compute_mg(Mg, M, g, sbp);
     end = timing::read();
     trace.push_back(end - begin);
+   
+    
+    if (sbp.rank == 0) {
+      std::cout << "Mg Head: " 
+      << Mg[0] << " " 
+      << Mg[1] << " " 
+      << Mg[2] << std::endl;
+    }
+    
+   
+    real_t zum = 0;
+    #pragma omp parallel for
+    for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+      #pragma omp critical
+      zum += Mg[i];
+    }
+	  std::cout << "Mg sum " << zum << std::endl;
+    
+
+    
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed Mx = g." << std::endl;
 
@@ -297,10 +522,30 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     LAMBDAb = (double *) mkl_malloc(sz, 64);
     memset(LAMBDAb, 0, sz);    
 
+    std::cout << "dim b " << sz / sizeof(real_t) << std::endl;
+
+
     // Compute LAMBDAb
-    begin = timing::read();
-    compute_lambda_b(LAMBDAb, Fsparse, Mg, FT_symbols, sbp);
-    end = timing::read();
+    switch (wf) {
+      case workflow::csr: {
+        begin = timing::read();
+        matrix_descr da;
+        da.type = SPARSE_MATRIX_TYPE_GENERAL;
+        status = mkl_sparse_d_mv(
+          SPARSE_OPERATION_TRANSPOSE, -1., 
+          FBigMKLT, da,
+          Mg, 
+          1., LAMBDAb);
+        mkl_sparse_status(status);
+        end = timing::read();
+      }
+      case workflow::sbcsr: {
+        begin = timing::read();
+        compute_lambda_b(LAMBDAb, Fsparse, Mg, FT_symbols, sbp);    
+        end = timing::read();
+      }
+      default: {};
+    }
     trace.push_back(end - begin);
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed LAMBDAb (gd - FT * M \\ g)." << std::endl;
@@ -320,17 +565,71 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
 
     std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << err << std::endl;
     
+    /*
+    if (sbp.rank == 0) {
+      for (std::size_t i = 0; i < sbp.n * sbp.n_interfaces; ++i) {
+        std::cout << LAMBDAb[i] << " ";
+      }
+      std::cout << std::endl;
+    }
+    */
+
+    if (sbp.rank == 0) {
+      std::cout << "Lb Head: " 
+        << LAMBDAb[0] << " " 
+        << LAMBDAb[1] << " " 
+        << LAMBDAb[2] << std::endl;
+    }
+    /*
+    nans = 0;
+    #pragma omp parallel for
+    for (std::size_t i = 0; i < sbp.n * sbp.n_interfaces; ++i) {
+      if (std::isnan(LAMBDAb[i])) {
+        #pragma omp critical
+        nans += 1;
+      }
+    }
+    if (nans > 0) {
+	    std::cout << "FATAL. " << nans << " nans." << std::endl;
+    }
+    */
+
     double *lamu = nullptr;
     lamu = (double *) mkl_malloc(sizeof(double) * sbp.n_interfaces * sbp.n, 64);
     if (sbp.rank == 0) {
       
+      int ttds = 14;
+      int save = mkl_set_num_threads_local(ttds); 
+      std::cout << "Threads for global solve " << ttds << " ... " << save << std::endl;
       begin = timing::read();
-        status = mkl_sparse_d_qr_solve(
-            SPARSE_OPERATION_NON_TRANSPOSE, lam_a_spa, nullptr,
-            SPARSE_LAYOUT_COLUMN_MAJOR, 1, lamu , sbp.n * sbp.n_interfaces, 
-            LAMBDAb, sbp.n * sbp.n_interfaces);
-        mkl_sparse_status(status);
+      status = mkl_sparse_d_qr_solve(
+          SPARSE_OPERATION_NON_TRANSPOSE, lam_a_spa, nullptr,
+          SPARSE_LAYOUT_COLUMN_MAJOR, 1, lamu , sbp.n * sbp.n_interfaces, 
+          LAMBDAb, sbp.n * sbp.n_interfaces);
       end = timing::read();
+      mkl_set_num_threads_local(save);
+      mkl_sparse_status(status);
+      
+        
+      std::cout << "Lu Head: " 
+        << lamu[0] << " " 
+        << lamu[1] << " " 
+        << lamu[2] << std::endl;
+      
+      /*
+      nans = 0;
+      #pragma omp parallel for
+      for (std::size_t i = 0; i < sbp.n_interfaces * sbp.n / sizeof(real_t); ++i) {
+        if (std::isnan(lamu[i])) {
+          #pragma omp critical
+          nans += 1;
+        }
+      }
+      if (nans > 0) {
+        std::cout << "FATAL. " << nans << " nans." << std::endl;
+      }
+      */
+
       
       //logging::out << std::setw(14) << std::fixed << end - begin 
       //  << " s # alt solve" << std::endl;
@@ -373,14 +672,43 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
     memset(rhs, 0, sz);
 
     // Compute right-hand side. b = g - F * LAMBDA.
-    begin = timing::read();
-    compute_rhs(rhs, g, Fsparse, lamu, F_symbols, sbp);
-    end = timing::read();
+    switch (wf) {
+      case workflow::csr: {
+        begin = timing::read();
+        matrix_descr da;
+        da.type = SPARSE_MATRIX_TYPE_GENERAL;
+        status = mkl_sparse_d_mv(
+          SPARSE_OPERATION_NON_TRANSPOSE, -1., 
+          FBigMKLT, da,
+          LAMBDAb, 
+          1., rhs);
+        mkl_sparse_status(status);
+        #pragma omp parallel for // num_threads(sbp.n_threads) 
+        for (std::size_t i = 0; i != sbp.n * sbp.n * sbp.rank_limit_u; ++i) {
+            rhs[i] += g[i];
+        }
+        end = timing::read();
+      }
+      case workflow::sbcsr: {
+        begin = timing::read();
+        compute_rhs(rhs, g, Fsparse, lamu, F_symbols, sbp);
+        end = timing::read();
+      }
+      default: {};
+    }
     trace.push_back(end - begin);
+
+    if (sbp.rank == 0) {
+      std::cout << "Rh Head: " 
+        << rhs[0] << " " 
+        << rhs[1] << " " 
+        << rhs[2] << std::endl;
+    }
+
     // logging::out << std::setw(14) << std::fixed << end - begin 
     //   << " s # " << "Computed b (g - F * LAMBDA)." << std::endl;
 
-    // Free g, F (sparse), and LAMBDA.
+    // Free g, F (sparse), and LAMBDAb
     mkl_free(g);
     for (auto &e: Fsparse) 
       mkl_sparse_destroy(e);
@@ -424,6 +752,8 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       sz = sizeof(real_t) * sbp.n * sbp.n * sbp.n_blocks; 
       uu = (double *) mkl_malloc(sz, 64);
     }
+
+    MPI_Barrier(MPI_COMM_WORLD);
     begin = timing::read();
 
     sz = sbp.n * sbp.n * sbp.rank_limit_u;  
@@ -477,11 +807,22 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
           "u=M^-1b           ",
           "Gather u          "}; 
 
-
         std::size_t offset = trace.size();
         std::vector<real_t> traces (offset * sbp.n_ranks);
         MPI_Gather(&trace[0], offset, MPI_DOUBLE, &traces[0], offset, MPI_DOUBLE, 0, MPI_COMM_WORLD);
         // printf("Values collected on process %d: %d, %d, %d, %d.\n", my_rank, buffer[0], buffer[1], buffer[2], buffer[3]);
+        
+        /*
+        for (std::size_t i = 0; i < sbp.n * sbp.n * sbp.n_blocks; ++i) {
+          std::cout << uu[i] << ", ";
+        }
+        std::cout << std::endl;
+        */
+
+        std::cout << uu[0] << ", " << uu[1] << ", " << uu[2] << std::endl;
+        std::cout << uu[sbp.n * sbp.n * sbp.n_blocks - 1] << ", " 
+                  << uu[sbp.n * sbp.n * sbp.n_blocks - 2] << ", " 
+                  << uu[sbp.n * sbp.n * sbp.n_blocks - 3] << std::endl;
 
         std::cout << "                ";
         for (std::size_t i = 0; i != sbp.n_ranks; ++i) { 
@@ -519,7 +860,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln) {
       std::size_t offset = trace.size();
       MPI_Gather(&trace[0], offset, MPI_DOUBLE, NULL, offset, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     }    
-    
     return;
 }
 

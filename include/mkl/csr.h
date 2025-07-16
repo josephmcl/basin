@@ -57,21 +57,26 @@ struct csr {
             data = &temp[0];
         }
 
-        T *vv; MKL_INT *rr, *cc;
+        T *vv; MKL_INT *rr, *rrr, *cc;
         vv = (T *) mkl_malloc(sizeof(T) * v.size(), 64);
         cc = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * c.size(), 64);
-        rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size(), 64);
+        rr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size() + 1, 64);
+        rrr = (MKL_INT *) mkl_malloc(sizeof(MKL_INT) * r.size() + 1, 64);
         memset(vv, 0, sizeof(T) * v.size());
         memset(cc, 0, sizeof(MKL_INT) * c.size());
-        memset(rr, 0, sizeof(MKL_INT) * r.size());
+        memset(rr, 0, sizeof(MKL_INT) * r.size() + 1);
+        memset(rrr, 0, sizeof(MKL_INT) * r.size() + 1);
 
         std::memcpy(vv, &data[0], sizeof(T) * v.size());
         std::memcpy(cc, &c[0], sizeof(MKL_INT) * c.size());
-        std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size());
+        std::memcpy(rr, &r[0], sizeof(MKL_INT) * r.size() + 1);
+        std::memcpy(rrr, &r[0], sizeof(MKL_INT) * r.size() + 1);
 
         _a.push_back(vv);
         _b.push_back(rr);
+        _b.push_back(rrr);
         _b.push_back(cc);
+
 
         auto rv = mkl_sparse_d_create_csr(
             mkls, 
@@ -79,9 +84,10 @@ struct csr {
             n,
             m,
             &rr[0],
-            &rr[1],
+            &rrr[1],
             &cc[0],
             &vv[0]);
+            
         return rv;
     }
 

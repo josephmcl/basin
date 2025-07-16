@@ -45,6 +45,8 @@ public:
   std::size_t rank_limit_u;
   std::vector<std::size_t> rank_index_u;
 
+  std::size_t rank_limit_iu;
+  std::vector<std::size_t> rank_index_iu;
   
   csr<real_t> hl;
   csr<real_t> hx, hy;

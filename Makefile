@@ -5,13 +5,14 @@
 include .env
 
 target = main
-mkl_target = lab-mkl 
+mkl_target = lab-mkl #-sapphirerapids
 
 # cc = g++-12
 # cc = g++-13
 
 cc = g++ -mkl -DMKL
 cc = mpicxx -mkl -DMKL
+cc = mpicxx -cxx=icpx -march=icelake-server -qmkl  -qopenmp -vec -mavx -fast -o3 # -fast -g -debug parallel -debug expr-source-pos # -DMKL_ILP64
 
 source_ext = cpp
 header_directory = include
@@ -102,8 +103,8 @@ oneapi_lib := -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell
 oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
 
 # More MKL Implementation stuff
-mkl_impl_includes :=  -fopenmp -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
-mkl_impl_libraries := $(pthread_library) -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl -fopenmp # $(oneapi_lib) 
+mkl_impl_includes :=  -qopenmp -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
+mkl_impl_libraries := $(pthread_library) -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl # $(oneapi_lib) 
 define speaker
 	@echo [make:$$PPID] $(1)
 	@$(1)

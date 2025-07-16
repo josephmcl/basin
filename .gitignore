@@ -3,4 +3,4 @@ object/
 lab
 main
 .env
-
+slurm-*
