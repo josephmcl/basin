@@ -1,6 +1,8 @@
 #include "poisson_2d.h"
 #include "csr.h"
 
+#include "mkl_cluster_sparse_solver.h"
+
 enum class workflow {
     csr, sbcsr 
 };
@@ -356,17 +358,15 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
     //////////////////////////////////////////////////////////////////
 
     std::vector<real_t *> MF;
-    MF.resize(M[0].size() * Fdense.size());
-    for (std::size_t index = 0; index != MF.size(); ++index) {
-        MF[index] = (real_t *) mkl_malloc(sizeof(real_t) * sbp.n * sbp.n * sbp.n, 64);
-        memset(MF[index], 0, sizeof(real_t) * sbp.n * sbp.n * sbp.n);
-    }
-    
-    // Compute solve of MX = F.
-    begin = timing::read();
+
     compute_mf(MF, M, Fdense, sbp);
-    end = timing::read();
-    trace.push_back(end - begin);
+    trace.push_back(compute_mf.elapsed);
+
+    std::cout << "MF " << std::endl;
+    for (std::size_t i = 0; i < 4; ++i) {
+      std::cout << MF[0][i] << " ";
+    }
+    std::cout << std::endl;
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed MX=F." << std::endl;
 
@@ -396,8 +396,12 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
       
     }
 
+    void *pt[64] = { 0 };
+    MKL_INT iparm[64] = { 0 };
+
     bool single_rank_trace = false;
     sparse_matrix_t lam_a_spa;
+    csr<double> lambda_a_s;
     if (single_rank_trace) {
       if (sbp.rank == 0) {
         
@@ -407,7 +411,7 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
         end = timing::read();
         trace.push_back(end - begin);
 
-        csr<double> lambda_a_s(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
+        lambda_a_s = csr<double>(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
         for (std::size_t i = 0; i != sbp.n_interfaces * sbp.n; ++i) {
           for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
             if (LAMBDAA[i * sbp.n_interfaces * sbp.n + j] != 0) {
@@ -452,20 +456,25 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
       trace.push_back(end - begin);
 
       // Create a sparse version of each 
-      csr<double> lambda_a_s(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
+      lambda_a_s = csr<double>(sbp.n_interfaces * sbp.n, sbp.n_interfaces * sbp.n);
       for (std::size_t i = 0; i != sbp.rank_limit_iu * sbp.n; ++i) {
         for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
           if (LAMBDAA[i * sbp.n_interfaces * sbp.n + j] != 0) {
-            std::cout << sbp.rank << " row " << i  + (sbp.rank_index_iu[0] * sbp.n) << " col " << j << " val " << LAMBDAA[i * sbp.n_interfaces * sbp.n + j] << std::endl;
+            // std::cout << sbp.rank << " row " << i  + (sbp.rank_index_iu[0] * sbp.n) << " col " << j << " val " << LAMBDAA[i * sbp.n_interfaces * sbp.n + j] << std::endl;
             lambda_a_s(LAMBDAA[i * sbp.n_interfaces * sbp.n + j], i  + (sbp.rank_index_iu[0] * sbp.n) , j);
+            //std::cout << ". ";
+          }
+          else {
+            //std::cout << "0 ";
           }
         }
+        //std::cout << std::endl;
       }
+      //std::cout << std::endl;
+      //std::cout << std::endl;
 
-      std::cout << "wahoo" << std::endl;
-      std::cout << lambda_a_s.r[0] << " " << lambda_a_s.c[0] << " " << lambda_a_s.v[0] <<std::endl;
-      std::cout << lambda_a_s.r[1] << " " << lambda_a_s.c[1] << " " << lambda_a_s.v[1] <<std::endl;
-      std::cout << "wahoo" << std::endl;
+      // std::cout << lambda_a_s.r[0] << " " << lambda_a_s.c[0] << " " << lambda_a_s.v[0] <<std::endl;
+      // std::cout << lambda_a_s.r[1] << " " << lambda_a_s.c[1] << " " << lambda_a_s.v[1] <<std::endl;
 
       // TODO: for ranks > 0 we have to manually set the row pointers 
       //       to sbp.rank_index_iu[0] * sbp.n because the csr struct
@@ -473,11 +482,103 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
       
       // lambda_a_s.mkl(&lam_a_spa);
 
+      MKL_INT mtype = 11; /* Real unsymmetric matrix */
+      /* Cluster Sparse Solver control parameters. */
+      MKL_INT maxfct, mnum, phase, msglvl, error, err_mem;
+      /* -------------------------------------------------------------------- */
+      /* .. Setup Cluster Sparse Solver control parameters.                                 */
+      /* -------------------------------------------------------------------- */
+      iparm[ 0] =  1; /* Solver default parameters overriden with provided by iparm */
+      iparm[ 1] =  2; /* Use METIS for fill-in reordering */
+      iparm[ 5] =  0; /* Write solution into x */
+      iparm[ 7] =  2; /* Max number of iterative refinement steps */
+      iparm[ 9] = 13; /* Perturb the pivot elements with 1E-13 */
+      iparm[10] =  1; /* Use nonsymmetric permutation and scaling MPS */
+      iparm[12] =  1; /* Switch on Maximum Weighted Matching algorithm (default for non-symmetric) */
+      iparm[17] = -1; /* Output: Number of nonzeros in the factor LU */
+      iparm[18] = -1; /* Output: Mflops for LU factorization */
+      iparm[26] =  1; /* Check input data for correctness */
+      iparm[34] =  1; /* Zero based indexing. */
+      iparm[39] =  2; /* Input: matrix/rhs/solution are distributed between MPI processes  */
+      /* If iparm[39]=2, the matrix is provided in distributed assembled matrix input          
+        format. In this case, each MPI process stores only a part (or domain) of the matrix A 
+        data. The bounds of the domain should be set via iparm(41) and iparm(42). Solution    
+        vector is distributed between process in same manner with rhs. */		
+
+      maxfct = 1; /* Maximum number of numerical factorizations. */
+      mnum   = 1; /* Which factorization to use. */
+      msglvl = 1; /* Print statistical information in file */
+      error  = 0; /* Initialize error flag */
+      err_mem = 0; /* Initialize hs components on each process: (since iparm[39] = 2 )
+        In this example initial matrix is distributed between 2 processes
+        so for MPI processes with rank > 1 input domains are empty */
+
+      iparm[40] = sbp.rank_index_iu[0] * sbp.n;
+      iparm[41] = (sbp.rank_index_iu[sbp.rank_limit_iu - 1] + 1) * sbp.n - 1;
+
+      //std::cout << iparm[40] << ", " << iparm[41] << std::endl;
+
       begin = timing::read();
-      /*  status = mkl_sparse_qr_reorder(lam_a_spa, dc);
+      if (single_rank_trace) { 
+        status = mkl_sparse_qr_reorder(lam_a_spa, dc);
         mkl_sparse_status(status);
         status = mkl_sparse_d_qr_factorize(lam_a_spa, nullptr);
-        mkl_sparse_status(status);*/
+        mkl_sparse_status(status);
+      }
+      else {
+        /* -------------------------------------------------------------------- */
+        /* .. Reordering and Symbolic Factorization. This step also allocates   */
+        /* all memory that is necessary for the factorization.                  */
+        /* -------------------------------------------------------------------- */
+        phase = 11;
+        MKL_INT nnn = sbp.n * sbp.n_interfaces;
+        /* Auxiliary variables. */
+        double  ddum; /* Double dummy   */
+        MKL_INT idum; /* Integer dummy. */
+        MKL_INT j;
+        MKL_INT nrhs = 1;
+        auto comm =  MPI_Comm_c2f( MPI_COMM_WORLD );
+
+        
+        /* NOTE: Manually set these values. Intel likes to use CSR3  
+                 variant that has a terminating value and zero to 
+                 follow it. */
+        lambda_a_s.r[(sbp.rank_index_iu[sbp.rank_limit_iu - 1] + 1) * sbp.n] = lambda_a_s.v.size() - 1;
+        lambda_a_s.r[(sbp.rank_index_iu[sbp.rank_limit_iu - 1] + 1) * sbp.n + 1] = 0;
+
+        cluster_sparse_solver(
+          pt, &maxfct, &mnum, &mtype, &phase,
+          &nnn, 
+          &lambda_a_s.v[0], 
+          &lambda_a_s.r[sbp.rank_index_iu[0] * sbp.n], 
+          &lambda_a_s.c[0], 
+          &idum, &nrhs, iparm, &msglvl, 
+          &ddum, &ddum, &comm, &error);
+            
+        if ( error != 0 )
+        {
+             //printf ("\nERROR during symbolic factorization: %lli", (long long int)error);
+            //goto final;
+            std::cout << "Trace analysis error: " << error << std::endl;
+        }
+
+        phase = 22;
+        cluster_sparse_solver(
+          pt, &maxfct, &mnum, &mtype, &phase,
+          &nnn, 
+          &lambda_a_s.v[0], 
+          &lambda_a_s.r[sbp.rank_index_iu[0] * sbp.n], 
+          &lambda_a_s.c[0], 
+          &idum, &nrhs, iparm, &msglvl, 
+          &ddum, &ddum, &comm, &error);
+            
+        if ( error != 0 )
+        {
+             //printf ("\nERROR during symbolic factorization: %lli", (long long int)error);
+            //goto final;
+            std::cout << "Trace factorization error: " << error << std::endl;
+        }
+      }
       end = timing::read();
 
       trace.push_back(end - begin);
@@ -514,8 +615,6 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
       zum += Mg[i];
     }
 	  std::cout << "Mg sum " << zum << std::endl;
-    
-
     
     // logging::out << std::setw(14) << std::fixed << end - begin 
     // << " s # " << "Computed Mx = g." << std::endl;
@@ -560,13 +659,31 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
     int err = 0;
     sz = sbp.n * sbp.n_interfaces;
 
-    begin = timing::read();
-    err = MPI_Reduce(LAMBDAb, LAMBDAb_reduced, sz, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    end = timing::read();
-    
-    trace.push_back(end - begin);
+    if (single_rank_trace) {
 
-    std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << err << std::endl;
+      /* Single rank trace does a single MPI reduce to Rank 0. */
+      begin = timing::read();
+      err = MPI_Reduce(LAMBDAb, LAMBDAb_reduced, sz, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+      end = timing::read();
+      trace.push_back(end - begin);
+      std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << err << std::endl;
+    
+    }
+    else {
+
+      /* Distribured performs an all reduce. */ 
+      // TODO: if we modify how we distribute lambda b then we might
+      //       be able to avoid communication here.
+      begin = timing::read();
+      err = MPI_Allreduce(LAMBDAb, LAMBDAb_reduced, sz, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+      end = timing::read();
+      trace.push_back(end - begin);
+      std::cout << sbp.rank << " MPI REDUCE SUM ERROR CODE: " << err << std::endl;
+    }
+    
+    
+
+    
     
     /*
     if (sbp.rank == 0) {
@@ -598,53 +715,122 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
     */
 
     double *lamu = nullptr;
-    lamu = (double *) mkl_malloc(sizeof(double) * sbp.n_interfaces * sbp.n, 64);
-    if (sbp.rank == 0) {
-      
-      int ttds = 14;
-      int save = mkl_set_num_threads_local(ttds); 
-      std::cout << "Threads for global solve " << ttds << " ... " << save << std::endl;
-      begin = timing::read();
-      status = mkl_sparse_d_qr_solve(
-          SPARSE_OPERATION_NON_TRANSPOSE, lam_a_spa, nullptr,
-          SPARSE_LAYOUT_COLUMN_MAJOR, 1, lamu , sbp.n * sbp.n_interfaces, 
-          LAMBDAb, sbp.n * sbp.n_interfaces);
-      end = timing::read();
-      mkl_set_num_threads_local(save);
-      mkl_sparse_status(status);
-      
+    if (single_rank_trace) {
+      lamu = (double *) mkl_malloc(sizeof(double) * sbp.n_interfaces * sbp.n, 64);
+      if (sbp.rank == 0) {
         
-      std::cout << "Lu Head: " 
-        << lamu[0] << " " 
-        << lamu[1] << " " 
-        << lamu[2] << std::endl;
-      
-      /*
-      nans = 0;
-      #pragma omp parallel for
-      for (std::size_t i = 0; i < sbp.n_interfaces * sbp.n / sizeof(real_t); ++i) {
-        if (std::isnan(lamu[i])) {
-          #pragma omp critical
-          nans += 1;
+        int ttds = 14;
+        int save = mkl_set_num_threads_local(ttds); 
+        std::cout << "Threads for global solve " << ttds << " ... " << save << std::endl;
+        begin = timing::read();
+        status = mkl_sparse_d_qr_solve(
+            SPARSE_OPERATION_NON_TRANSPOSE, lam_a_spa, nullptr,
+            SPARSE_LAYOUT_COLUMN_MAJOR, 1, lamu , sbp.n * sbp.n_interfaces, 
+            LAMBDAb_reduced, sbp.n * sbp.n_interfaces);
+        end = timing::read();
+        mkl_set_num_threads_local(save);
+        mkl_sparse_status(status);
+        
+          
+        std::cout << "Lu Head: " 
+          << lamu[0] << " " 
+          << lamu[1] << " " 
+          << lamu[2] << std::endl;
+        
+        /*
+        nans = 0;
+        #pragma omp parallel for
+        for (std::size_t i = 0; i < sbp.n_interfaces * sbp.n / sizeof(real_t); ++i) {
+          if (std::isnan(lamu[i])) {
+            #pragma omp critical
+            nans += 1;
+          }
         }
-      }
-      if (nans > 0) {
-        std::cout << "FATAL. " << nans << " nans." << std::endl;
-      }
-      */
+        if (nans > 0) {
+          std::cout << "FATAL. " << nans << " nans." << std::endl;
+        }
+        */
 
-      
-      //logging::out << std::setw(14) << std::fixed << end - begin 
-      //  << " s # alt solve" << std::endl;
-      /*
-      begin = timing::read();
-      compute_lambda(LAMBDAA, piv, LAMBDAb, sbp);
-      end = timing::read();
-      */
-      trace.push_back(end - begin);
+        
+        //logging::out << std::setw(14) << std::fixed << end - begin 
+        //  << " s # alt solve" << std::endl;
+        /*
+        begin = timing::read();
+        compute_lambda(LAMBDAA, piv, LAMBDAb, sbp);
+        end = timing::read();
+        */
+        trace.push_back(end - begin);
+      }
+      else {
+        trace.push_back(0);
+      }
     }
     else {
-      trace.push_back(0);
+
+      sz = sbp.rank_limit_iu * sbp.n;
+      lamu = (double *) mkl_malloc(sizeof(double) * sz, 64);
+      std::cout << "Sz " << sz << std::endl;
+      
+      MKL_INT mtype = 11; /* Real unsymmetric matrix */
+      MKL_INT maxfct, mnum, phase, msglvl, error, err_mem;
+      /* -------------------------------------------------------------------- */
+      /* .. Setup Cluster Sparse Solver control parameters.                                 */
+      /* -------------------------------------------------------------------- */
+      iparm[ 0] =  1; /* Solver default parameters overriden with provided by iparm */
+      iparm[ 1] =  2; /* Use METIS for fill-in reordering */
+      iparm[ 5] =  0; /* Write solution into x */
+      iparm[ 7] =  2; /* Max number of iterative refinement steps */
+      iparm[ 9] = 13; /* Perturb the pivot elements with 1E-13 */
+      iparm[10] =  1; /* Use nonsymmetric permutation and scaling MPS */
+      iparm[12] =  1; /* Switch on Maximum Weighted Matching algorithm (default for non-symmetric) */
+      iparm[17] = -1; /* Output: Number of nonzeros in the factor LU */
+      iparm[18] = -1; /* Output: Mflops for LU factorization */
+      iparm[26] =  1; /* Check input data for correctness */
+      iparm[34] =  1; /* Zero based indexing. */
+      iparm[39] =  2; /* Input: matrix/rhs/solution are distributed between MPI processes  */
+      /* If iparm[39]=2, the matrix is provided in distributed assembled matrix input          
+        format. In this case, each MPI process stores only a part (or domain) of the matrix A 
+        data. The bounds of the domain should be set via iparm(41) and iparm(42). Solution    
+        vector is distributed between process in same manner with rhs. */		
+
+      maxfct = 1; /* Maximum number of numerical factorizations. */
+      mnum   = 1; /* Which factorization to use. */
+      msglvl = 1; /* Print statistical information in file */
+      error  = 0; /* Initialize error flag */
+      err_mem = 0; /* Initialize hs components on each process: (since iparm[39] = 2 )
+        In this example initial matrix is distributed between 2 processes
+        so for MPI processes with rank > 1 input domains are empty */
+
+      iparm[40] = sbp.rank_index_iu[0] * sbp.n;
+      iparm[41] = (sbp.rank_index_iu[sbp.rank_limit_iu - 1] + 1) * sbp.n - 1;
+
+      
+      phase = 33;
+      MKL_INT nnn = sbp.n * sbp.n_interfaces;
+      /* Auxiliary variables. */
+      MKL_INT idum; /* Integer dummy. */
+      MKL_INT j;
+      MKL_INT nrhs = 1;
+      auto comm =  MPI_Comm_c2f( MPI_COMM_WORLD );
+      std::size_t rank_offset = sbp.rank_index_iu[0] * sbp.n;
+
+      begin = timing::read();
+      cluster_sparse_solver(
+        pt, &maxfct, &mnum, &mtype, &phase,
+        &nnn, 
+        &lambda_a_s.v[0], 
+        &lambda_a_s.r[rank_offset], 
+        &lambda_a_s.c[0], 
+        &idum, &nrhs, iparm, &msglvl, 
+        &LAMBDAb_reduced[rank_offset], 
+        &lamu[0], &comm, &error);
+      end = timing::read();
+      trace.push_back(end - begin);
+      
+      if ( error != 0 ) {
+          std::cout << "Trace solve error: " << error << std::endl;
+      } 
+
     }
 
     //for (int i = 0; i < 20; ++i) {
@@ -653,17 +839,28 @@ void poisson_2d::problem(std::size_t vln, std::size_t eln, std::size_t w) {
     //std::cout << std::endl; 
 
     sz = sizeof(real_t) * sbp.n * sbp.n_interfaces;
-    if (sbp.rank == 0) {
-      std::memcpy(LAMBDAb, LAMBDAb_reduced, sz);
-      mkl_free(LAMBDAb_reduced);
+    if (single_rank_trace) {
+      if (sbp.rank == 0) {
+        std::memcpy(LAMBDAb, LAMBDAb_reduced, sz);
+      }
+      else {
+        mkl_free(LAMBDAb_reduced); 
+      }
     }
     else {
-      mkl_free(LAMBDAb_reduced);
+      memset(&LAMBDAb[0], 0, sizeof(real_t) * sbp.n * sbp.n_interfaces);
+      std::memcpy(&LAMBDAb[sbp.n * sbp.rank_index_iu[0]], lamu, sizeof(real_t) * sbp.n * sbp.rank_limit_iu);
     }
 
     begin = timing::read();
-    sz = sbp.n * sbp.n_interfaces;
-    MPI_Bcast(LAMBDAb, sz, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    if (single_rank_trace) {
+      sz = sbp.n * sbp.n_interfaces;
+      MPI_Bcast(LAMBDAb, sz, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    }
+    else {
+      sz = sbp.n * sbp.n_interfaces;
+      MPI_Allreduce(MPI_IN_PLACE, LAMBDAb, sz, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    }
     end = timing::read();
 
     trace.push_back(end - begin);

@@ -10,4 +10,4 @@ LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/gpfs/packages/spack/spack-rhel8/opt/spack/linu
 export LD_LIBRARY_PATH
 
 #/home/jmclaug2/intel/oneapi/advisor/2025.1/lib64/libstdc++.so.6
-export LD_LIBRARY_PATH=/home/jmclaug2/intel/oneapi/advisor/2025.1/lib64:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/home/jmclaug2/intel/oneapi/2025.1/lib:/home/jmclaug2/intel/oneapi/advisor/2025.1/lib64:$LD_LIBRARY_PATH

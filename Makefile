@@ -10,9 +10,11 @@ mkl_target = lab-mkl #-sapphirerapids
 # cc = g++-12
 # cc = g++-13
 
-cc = g++ -mkl -DMKL
-cc = mpicxx -mkl -DMKL
-cc = mpicxx -cxx=icpx -march=icelake-server -qmkl  -qopenmp -vec -mavx -fast -o3 # -fast -g -debug parallel -debug expr-source-pos # -DMKL_ILP64
+# cc = g++ -mkl -DMKL
+# cc = mpicxx -mkl -DMKL
+# cc = mpicxx -cxx=icpx -march=icelake-server -qmkl  -qopenmp -vec -mavx -fast -o3  # -fast -g -debug parallel -debug expr-source-pos # -DMKL_ILP64
+cc = /home/jmclaug2/intel/oneapi/2025.1/bin/mpicxx -cxx=/home/jmclaug2/intel/oneapi/2025.1/bin/icpx -qmkl  -qopenmp -vec -mavx -fast -o3
+
 
 source_ext = cpp
 header_directory = include
@@ -23,7 +25,7 @@ test_directory   = test
 
 sources := $(wildcard $(source_directory)/*.cpp)
 headers := $(wildcard $(header_directory)/*.h)
-objects := $(sources:$(source_directory)/%.cpp=$(object_directory)/%.o)
+objects := $(sources:$(source_directory)/%.cpp=$(object_directory)/%.o)  
 
 test_sources := $(wildcard $(test_directory)/*.cpp)
 test_headers := $(wildcard $(test_directory)/*.h)
@@ -70,7 +72,8 @@ petsc_include    := -I${PETSC_INCLUDE}
 openmpi_include  := -I${OPENMPI_INCLUDE}
 cernroot_include := -I${CERN_ROOT_INCLUDE}
 openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include 
-mkl_include      := -I${MKLROOT}/include 
+#mkl_include      := -I${MKLROOT}/include 
+mkl_include      := -I/home/jmclaug2/intel/oneapi/mkl/latest/include
 
 includes := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include) 
 #  \
@@ -90,8 +93,17 @@ openmp_library := /opt/homebrew/Cellar/libomp/16.0.4/lib/libomp.dylib
 mkl_library := /gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-mkl-2023.1.0-zq7rmpuigpkajdv7mkddhublalbxjbhy/mkl/2023.1.0/lib
 #-lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lm 
 
- # libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
-libraries := $(petsc_library) $(pthread_library) $(mkl_library) 
+# libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
+# $(mkl_library) -o libmkl_blacs_openmp_lp64.so
+# -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmpi.so 
+libraries := $(petsc_library) $(pthread_library) \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_lp64.so \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_core.so \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_intelmpi_lp64.so \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libiomp5.so \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_openmpi_lp64.so \
+				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.so \
+				 -lm -ldl -lpthread
 #	$(mpi_library) -fopenmp 
 # $(openmp_library)
  # -lomp #$(cernroot_library) 
@@ -104,7 +116,26 @@ oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
 
 # More MKL Implementation stuff
 mkl_impl_includes :=  -qopenmp -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
-mkl_impl_libraries := $(pthread_library) -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl # $(oneapi_lib) 
+mkl_impl_libraries := -L/home/jmclaug2/intel/oneapi/2025.1/lib \
+-lmkl_scalapack_lp64 \
+-lmkl_blacs_intelmpi_lp64 \
+-lmkl_intel_lp64 \
+-lmkl_core \
+-lmkl_intel_thread \
+-liomp5 \
+-lpthread -lm -ldl
+
+#	-Wl,--start-group \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_thread.a \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_lp64.a \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_core.a \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_intelmpi_lp64.a \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.a \
+#	-Wl,--end-group \
+#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libiomp5.so \
+#	-lm -ldl -lpthread
+# 	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.a \
+# -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl # $(oneapi_lib) 
 define speaker
 	@echo [make:$$PPID] $(1)
 	@$(1)

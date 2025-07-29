@@ -5,6 +5,8 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <functional>
+#include <optional>
 
 namespace timing {
 	
@@ -59,5 +61,43 @@ namespace timing {
 	tsc_count read();
 
     void init(void);
+
+
+	/* This struct instruments functions, pass the parameter types 
+	   into the template and plug in the pre, call, and post 
+	   functions. Intended to clean up the mess of code at the top
+	   level. 
+	   
+	   NOTE: We will have to extend this to measure things other than 
+	         time.  */
+	template <typename... arguments>
+	struct instrument {
+
+		using f = std::function<std::size_t(arguments&&... a)>;
+		
+		instrument(std::optional<f> pre, f call, std::optional<f> post){
+			this->pre = pre;
+			this->call = call;
+			this->post = post;
+		}
+
+		std::optional<f> pre;
+		f call;
+		std::optional<f> post;
+		
+		tsc_count begin = read();   // TODO: default constructor for 
+		tsc_count end = read();     //       this type.
+		double elapsed;
+		
+		instrument &operator()(arguments&&... a){
+			if (pre) (*pre)(a...);
+			begin = read(); 
+			call(a...);
+			end = read();
+			if (post) (*post)(a...);
+			elapsed = end - begin;
+		}
+	};
+	
 }
 

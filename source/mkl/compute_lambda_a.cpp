@@ -188,7 +188,7 @@ auto compute_lambda_a_mpi(
       //std::cout << index / (sbp.n * sbp.n) << std::endl;
       //std::cout << std::endl;
 
-      std::cout << a << ", " << b << ", " <<  (b - (sbp.rank_index_iu[0])) << std::endl; 
+      // std::cout << a << ", " << b << ", " <<  (b - (sbp.rank_index_iu[0])) << std::endl; 
   
       for (std::size_t j = 0; j != sbp.n; ++j) {
         lat = &lambdaA[((j + ((b - (sbp.rank_index_iu[0])) * sbp.n)) * sbp.n_interfaces * sbp.n) + (a * sbp.n)];
@@ -243,15 +243,30 @@ auto compute_lambda_a_mpi(
     */
   
   
-    std::size_t v;
+
+    /* Add values of diagonal H matrix. Stored as a vector and indexed
+       using v. NOTE: Will need multiple H vectors if we vary the size
+       of the sub-problems. */
+    std::size_t vector_index, dense_index;
     // #pragma omp parallel for private(v)
-    for (std::size_t j = 0; j != sbp.n_interfaces * sbp.n; ++j) {
-      v = j % sbp.n;
-      lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += sbp.h1v[v] * 2. * sbp.TAU_VALUE;
-      // lambdaA[(j * sbp.n_interfaces * sbp.n) + j] += 1;
+    /* NOTE: Loop limit uses rank-relative interface limit. */
+    for (std::size_t j = 0; j != sbp.rank_limit_iu * sbp.n; ++j) { 
+      
+      /* Compute indices. */
+      vector_index = j % sbp.n;
+      dense_index  =
+        /* Vertical stride (array is n_interfaces * n wide) */
+        (j * sbp.n_interfaces * sbp.n) 
+        /* Horizontal stride */
+        + j 
+        /* NOTE: Rank-relative Horizontal offset. */
+        + (sbp.rank_index_iu[0] * sbp.n); 
+
+      /* Set value in dense matrix. */
+      lambdaA[dense_index] += 
+        sbp.h1v[vector_index] * 2. * sbp.TAU_VALUE; 
     }
-    
-  
+
     mkl_free(FTMF);
     return;
 }
