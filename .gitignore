@@ -1,6 +1,5 @@
 .DS_Store
-object/
-lab
-main
+build/
+bin/
 .env
 slurm-*

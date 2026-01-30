@@ -1,190 +1,137 @@
-# Makefile for building they hybridized SBP-SAT basin experiment. 
-# 
+# Basin: Hybrid SBP-SAT Poisson Solver
 #
+# Targets:
+#   make mkl      - Build MKL solver (main)
+#   make generate - Build component generator (precompute M, LambdaA)
+#   make gpu      - Build GPU version (future)
+#   make clean    - Remove build artifacts
 
-include .env
+# Compiler configuration
+CXX      ?= mpicxx
+ICPX     ?= icpx
+CXXFLAGS := -std=c++20 -Wall -Wpedantic -O3
 
-target = main
-mkl_target = lab-mkl #-sapphirerapids
+# Intel oneAPI paths (override via environment or command line)
+ONEAPI_ROOT ?= /home/jmclaug2/intel/oneapi/2025.1
+MKL_ROOT    ?= $(ONEAPI_ROOT)/mkl/latest
 
-# cc = g++-12
-# cc = g++-13
+# Directory structure
+SRC_DIR    := source
+INC_DIR    := include
+OBJ_DIR    := build
+BIN_DIR    := bin
 
-# cc = g++ -mkl -DMKL
-# cc = mpicxx -mkl -DMKL
-# cc = mpicxx -cxx=icpx -march=icelake-server -qmkl  -qopenmp -vec -mavx -fast -o3  # -fast -g -debug parallel -debug expr-source-pos # -DMKL_ILP64
-cc = /home/jmclaug2/intel/oneapi/2025.1/bin/mpicxx -cxx=/home/jmclaug2/intel/oneapi/2025.1/bin/icpx -qmkl  -qopenmp -vec -mavx -fast -o3
+# =============================================================================
+# MKL Backend
+# =============================================================================
 
+MKL_SRC_DIR := $(SRC_DIR)/mkl
+MKL_INC_DIR := $(INC_DIR)/mkl
+MKL_OBJ_DIR := $(OBJ_DIR)/mkl
 
-source_ext = cpp
-header_directory = include
-source_directory = source
-object_directory = object
-binary_directory = .
-test_directory   = test
+# Main solver
+MKL_TARGET  := $(BIN_DIR)/basin-mkl
+MKL_MAIN    := hybrid_sbp_sat_2d_poisson
 
-sources := $(wildcard $(source_directory)/*.cpp)
-headers := $(wildcard $(header_directory)/*.h)
-objects := $(sources:$(source_directory)/%.cpp=$(object_directory)/%.o)  
+# Component generator
+GEN_TARGET  := $(BIN_DIR)/basin-generate
+GEN_MAIN    := generate_components
 
-test_sources := $(wildcard $(test_directory)/*.cpp)
-test_headers := $(wildcard $(test_directory)/*.h)
-test_objects := $(test_sources:$(test_directory)/%.cpp=$(object_directory)/%.o)	
-test_target  := test
+MKL_CXX      := $(ONEAPI_ROOT)/bin/mpicxx
+MKL_CXXFLAGS := $(CXXFLAGS) -cxx=$(ONEAPI_ROOT)/bin/icpx -qmkl -qopenmp -vec -mavx -fast
 
+MKL_INCLUDES := -I$(MKL_INC_DIR) -I$(MKL_ROOT)/include
+MKL_LIBS     := -L$(ONEAPI_ROOT)/lib \
+                -lmkl_scalapack_lp64 \
+                -lmkl_blacs_intelmpi_lp64 \
+                -lmkl_intel_lp64 \
+                -lmkl_core \
+                -lmkl_intel_thread \
+                -liomp5 \
+                -lpthread -lm -ldl
 
-# New stuff of MKL implementation
-mkl_impl_header_directory := $(header_directory)/mkl
-mkl_impl_source_directory := $(source_directory)/mkl
-mkl_impl_object_directory := $(object_directory)/mkl
+# All sources except entry points
+MKL_SOURCES := $(filter-out $(MKL_SRC_DIR)/$(MKL_MAIN).cpp $(MKL_SRC_DIR)/$(GEN_MAIN).cpp, \
+               $(wildcard $(MKL_SRC_DIR)/*.cpp))
+MKL_OBJECTS := $(MKL_SOURCES:$(MKL_SRC_DIR)/%.cpp=$(MKL_OBJ_DIR)/%.o)
+MKL_HEADERS := $(wildcard $(MKL_INC_DIR)/*.h)
 
-mkl_impl_object_directory_absent = $(mkl_impl_object_directory)-
+# Entry point objects
+MKL_MAIN_OBJ := $(MKL_OBJ_DIR)/$(MKL_MAIN).o
+GEN_MAIN_OBJ := $(MKL_OBJ_DIR)/$(GEN_MAIN).o
 
-mkl_impl_sources := $(wildcard $(mkl_impl_source_directory)/*.cpp)
-mkl_impl_headers := $(wildcard $(mkl_impl_header_directory)/*.h)
-mkl_impl_objects := $(mkl_impl_sources:$(mkl_impl_source_directory)/%.cpp=$(mkl_impl_object_directory)/%.o)
+# =============================================================================
+# GPU Backend (placeholder for future)
+# =============================================================================
 
-entrypoint      := main
-test_entrypoint := test
-test_target := lab
+GPU_SRC_DIR := $(SRC_DIR)/gpu
+GPU_INC_DIR := $(INC_DIR)/gpu
+GPU_OBJ_DIR := $(OBJ_DIR)/gpu
+GPU_TARGET  := $(BIN_DIR)/basin-gpu
 
-nil := 
-space := $(nil) $(nil)
+# GPU_SOURCES := $(wildcard $(GPU_SRC_DIR)/*.cpp)
+# GPU_OBJECTS := $(GPU_SOURCES:$(GPU_SRC_DIR)/%.cpp=$(GPU_OBJ_DIR)/%.o)
 
-# The testing framework needs access to both, the project objects and  
-# test framework objects. However, it should not include any other 
-# entrypoint objects.
-objects_and_test_objects = $(nil)
-objects_and_test_objects += $(filter-out \
-	$(object_directory)/$(entrypoint).o, $(objects))
-objects_and_test_objects += $(test_objects)
-#, \
-#	$(join $(join $(objects), $(space)), $(test_objects)))
+# =============================================================================
+# Build Rules
+# =============================================================================
 
-rm = rm -f
+.PHONY: mkl generate gpu clean help all
 
-gccflags = -std=c++2a -Wall -Wpedantic  -O3 -finput-charset=UTF-8
+help:
+	@echo "Basin: Hybrid SBP-SAT Poisson Solver"
+	@echo ""
+	@echo "Usage:"
+	@echo "  make mkl      Build MKL solver"
+	@echo "  make generate Build component generator (precompute M, LambdaA)"
+	@echo "  make gpu      Build GPU version (not yet implemented)"
+	@echo "  make clean    Remove build artifacts"
+	@echo ""
+	@echo "Configuration (override via environment):"
+	@echo "  ONEAPI_ROOT  Intel oneAPI root (current: $(ONEAPI_ROOT))"
+	@echo "  MKL_ROOT     MKL root directory (current: $(MKL_ROOT))"
 
-compiler_flags := $(gccflags) 
+all: mkl generate
 
-openblas_include := -I$(OPENBLAS_INCLUDE)
-petsc_include    := -I${PETSC_INCLUDE}
-openmpi_include  := -I${OPENMPI_INCLUDE}
-cernroot_include := -I${CERN_ROOT_INCLUDE}
-openmp_include   := -I/opt/homebrew/Cellar/libomp/16.0.4/include 
-#mkl_include      := -I${MKLROOT}/include 
-mkl_include      := -I/home/jmclaug2/intel/oneapi/mkl/latest/include
+# MKL solver target
+mkl: $(MKL_TARGET)
 
-includes := -I./$(header_directory)/common -I./$(header_directory)/mkl $(mkl_include) 
-#  \
-#	$(openmpi_include) 
-# $(openmp_include)
-# $(cernroot_include)
+$(MKL_TARGET): $(MKL_OBJECTS) $(MKL_MAIN_OBJ) | $(BIN_DIR)
+	@echo "[LINK] $@"
+	@$(MKL_CXX) $(MKL_CXXFLAGS) $(MKL_OBJECTS) $(MKL_MAIN_OBJ) -o $@ $(MKL_LIBS)
 
-test_includes := $(includes) -I./$(test_directory)
+# Component generator target
+generate: $(GEN_TARGET)
 
-cernroot_library := -L${CERN_ROOT_LIBRARY} #--with-debugging=yes
+$(GEN_TARGET): $(MKL_OBJECTS) $(GEN_MAIN_OBJ) | $(BIN_DIR)
+	@echo "[LINK] $@"
+	@$(MKL_CXX) $(MKL_CXXFLAGS) $(MKL_OBJECTS) $(GEN_MAIN_OBJ) -o $@ $(MKL_LIBS)
 
-home_library := -L/opt/homebrew/lib 
-pthread_library := -lpthread
-petsc_library := ${PETSC_LIBRARY}
-mpi_library := /opt/homebrew/Cellar/open-mpi/4.1.5/lib/libmpi.dylib
-openmp_library := /opt/homebrew/Cellar/libomp/16.0.4/lib/libomp.dylib
-mkl_library := /gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-mkl-2023.1.0-zq7rmpuigpkajdv7mkddhublalbxjbhy/mkl/2023.1.0/lib
-#-lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lm 
+# Object file compilation
+$(MKL_OBJ_DIR)/%.o: $(MKL_SRC_DIR)/%.cpp $(MKL_HEADERS) | $(MKL_OBJ_DIR)
+	@echo "[CXX]  $<"
+	@$(MKL_CXX) $(MKL_CXXFLAGS) $(MKL_INCLUDES) -c $< -o $@
 
-# libraries := -L/usr/local/opt/openblas/lib -lopenblas -lpthread
-# $(mkl_library) -o libmkl_blacs_openmp_lp64.so
-# -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmpi.so 
-libraries := $(petsc_library) $(pthread_library) \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_lp64.so \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_core.so \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_intelmpi_lp64.so \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libiomp5.so \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_openmpi_lp64.so \
-				 -L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.so \
-				 -lm -ldl -lpthread
-#	$(mpi_library) -fopenmp 
-# $(openmp_library)
- # -lomp #$(cernroot_library) 
+# GPU target (placeholder)
+gpu:
+	@echo "GPU backend not yet implemented"
+	@echo "Create source/gpu/ and include/gpu/ to add GPU support"
 
-oneapi_root := /gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-compilers-2023.1.0-3d5dbsmapp7perx5ikhy4b2dwpkoiz7w/compiler/2023.1.0/linux/include
-oneapi_sycl := $(oneapi_root)/sycl/
-oneapi_lib := -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-compilers-2023.1.0-3d5dbsmapp7perx5ikhy4b2dwpkoiz7w/compiler/2023.1.0/linux/lib/
+# Directory creation
+$(BIN_DIR):
+	@mkdir -p $@
 
-oneapi_include := -I$(oneapi_root) -I$(oneapi_sycl)
+$(MKL_OBJ_DIR):
+	@mkdir -p $@
 
-# More MKL Implementation stuff
-mkl_impl_includes :=  -qopenmp -I./$(header_directory)/common -I./$(header_directory)/mkl   $(mkl_include) # $(oneapi_include)
-mkl_impl_libraries := -L/home/jmclaug2/intel/oneapi/2025.1/lib \
--lmkl_scalapack_lp64 \
--lmkl_blacs_intelmpi_lp64 \
--lmkl_intel_lp64 \
--lmkl_core \
--lmkl_intel_thread \
--liomp5 \
--lpthread -lm -ldl
+$(GPU_OBJ_DIR):
+	@mkdir -p $@
 
-#	-Wl,--start-group \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_thread.a \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_intel_lp64.a \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_core.a \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_blacs_intelmpi_lp64.a \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.a \
-#	-Wl,--end-group \
-#	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libiomp5.so \
-#	-lm -ldl -lpthread
-# 	-L/home/jmclaug2/intel/oneapi/2025.1/lib/libmkl_scalapack_lp64.a \
-# -L$(mkl_library)  -Wl,--no-as-needed -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -L/gpfs/packages/spack/spack-rhel8/opt/spack/linux-rhel8-broadwell/gcc-13.1.0/intel-oneapi-dal-2023.1.0-rwo3dn4gikgsiubrqa4gxaxlqsvn66xx/compiler/2023.1.0/linux/compiler/lib/intel64_lin -liomp5 -lpthread -lm -ldl # $(oneapi_lib) 
-define speaker
-	@echo [make:$$PPID] $(1)
-	@$(1)
-endef
-
-mkdir = mkdir -p
-
-$(binary_directory)/$(target): $(objects)
-	$(call speaker,\
-	$(cc) $(objects) -o $@ $(libraries))
-
-$(binary_directory)/$(test_target): $(objects) $(test_objects)
-	@echo $(objects)
-	@echo $(test_objects)
-	@echo $(objects_and_test_objects)
-	$(call speaker,\
-	$(cc) $(objects_and_test_objects) -o $@ $(libraries))
-
-$(objects): $(object_directory)/%.o: $(source_directory)/%.$(source_ext) 
-	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(includes)) 
-
-$(mkl_impl_object_directory_absent):
-	$(call speaker, $(mkdir) $(mkl_impl_object_directory))
-
-$(test_objects): $(object_directory)/%.o : $(test_directory)/%.cpp
-	$(call speaker,\
-	$(cc) $(compiler_flags) -c $< -o $@ $(test_includes)) 
-
-$(binary_directory)/$(mkl_target): $(mkl_impl_objects) 
-	$(call speaker,\
-	$(cc) $(mkl_impl_objects) -o $@ $(mkl_impl_libraries))
- 
-$(mkl_impl_objects): $(mkl_impl_object_directory)/%.o: $(mkl_impl_source_directory)/%.$(source_ext) $(mkl_impl_object_directory_absent)
-	$(call speaker,\
-	$(cc) $(compiler_flags)  -c $< -o $@ $(mkl_impl_includes)) 
-
-.PHONY: petsc 
-petsc: $(binary_directory)/$(target)
-
-.PHONY: mkl 
-mkl: $(binary_directory)/$(mkl_target)
-
-.PHONY: clean
+# Clean
 clean:
-	@$(rm) -rf $(objects) $(mkl_impl_objects)
-	@$(rm) -rf $(test_objects)
+	@echo "[CLEAN] Removing build artifacts"
+	@rm -rf $(OBJ_DIR)
+	@rm -rf $(BIN_DIR)
 
-.PHONY: remove
-remove: clean
-	@$(rm) $(BINDIR)/$(target)
-
+# Convenience: rebuild from scratch
+rebuild: clean mkl
