@@ -102,13 +102,15 @@ int main(int argc, char **argv) {
   for (std::size_t i = 0; i != block_grid.size() - 1; ++i)
     grids.push_back(range_t(*block_grid[i], *block_grid[i + 1], n));
 
-  auto gdata = data<real_t>{};
+  // Refer to the static members through the type, not an instance: nvcc
+  // rewrites instance.static_member into a comma expression.
+  using exact = data<real_t>;
   real_t *boundary_solution = nullptr;
   compute_boundary_solution(&boundary_solution, grids,
-                            {gdata.w, gdata.e, gdata.s, gdata.n},
+                            boundary_functions{exact::w, exact::e, exact::s, exact::n},
                             {0., 1., 0., 1.});
   real_t *sources = nullptr;
-  compute_sources(&sources, grids, gdata.source_function);
+  compute_sources(&sources, grids, exact::source_function);
 
   vv<std::size_t> boundary_data_map, boundary_order_map;
   make_boundary_maps(boundary_data_map, boundary_order_map, L);
