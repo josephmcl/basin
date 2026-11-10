@@ -1,5 +1,5 @@
 
-#include <cuda_runtime.h>
+#include "compute_g.cuh"
 
 // make sure to cap for warp size = 32 CUDA
 template <int THREADS_PER_ROW>
