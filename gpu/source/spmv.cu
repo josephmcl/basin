@@ -3,6 +3,8 @@
 
 namespace {
 
+
+// few nonzero
 __global__ void scalar_csr_kernel(const int m,
                                   const int *__restrict__ row_offsets,
                                   const int *__restrict__ cols,
@@ -27,7 +29,7 @@ __global__ void scalar_csr_kernel(const int m,
 
 // Launch with blockDim.x == THREADS_PER_ROW and blockDim.x * blockDim.y a
 // multiple of 32, so each row's lanes sit inside one warp and every warp is
-// full when __ballot_sync runs.
+// full when __ballot_sync runs. sweeps across "dense" row of nnz
 template <int THREADS_PER_ROW>
 __global__ void vector_csr_kernel(const int m,
                                   const int *__restrict__ row_offsets,
